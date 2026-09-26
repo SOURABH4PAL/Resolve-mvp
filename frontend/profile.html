@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Profile - ResolveHub</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <div class="container">
+    <div class="card" style="max-width: 600px; margin: 0 auto;">
+      <h2 class="card-title">User Profile</h2>
+      
+      <div id="profile-content">Loading user details...</div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    checkAuth();
+    renderNavbar();
+
+    async function loadProfile() {
+      const contentDiv = document.getElementById('profile-content');
+      try {
+        const res = await apiFetch('/users/me');
+        if (res.ok) {
+          const user = await res.json();
+          contentDiv.innerHTML = `
+            <table class="table" style="margin-top: 1rem;">
+              <tr>
+                <th style="width: 35%;">Employee ID</th>
+                <td><strong>${user.employee_id}</strong></td>
+              </tr>
+              <tr>
+                <th>Full Name</th>
+                <td>${user.name}</td>
+              </tr>
+              <tr>
+                <th>Email Address</th>
+                <td>${user.email}</td>
+              </tr>
+              <tr>
+                <th>Role</th>
+                <td><span class="user-badge">${user.role}</span></td>
+              </tr>
+              <tr>
+                <th>Status</th>
+                <td><span class="badge badge-RESOLVED">${user.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+              </tr>
+              <tr>
+                <th>Joined</th>
+                <td>${new Date(user.created_at).toLocaleDateString()}</td>
+              </tr>
+            </table>
+          `;
+        } else {
+          contentDiv.innerHTML = '<div class="alert alert-danger">Failed to fetch profile info.</div>';
+        }
+      } catch (err) {
+        contentDiv.innerHTML = '<div class="alert alert-danger">Unable to load profile.</div>';
+      }
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Tickets - ResolveHub</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <div class="container">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 class="card-title" style="margin-bottom: 0;">My Support Tickets</h2>
+        <a href="create-ticket.html" class="btn btn-primary">+ Create Ticket</a>
+      </div>
+
+      <div id="tickets-container">Loading tickets...</div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    checkAuth();
+    renderNavbar();
+
+    async function loadTickets() {
+      const container = document.getElementById('tickets-container');
+      try {
+        const res = await apiFetch('/tickets');
+        if (res.ok) {
+          const tickets = await res.json();
+          if (tickets.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No tickets found. Click "Create Ticket" to open a new support request.</p>';
+            return;
+          }
+
+          container.innerHTML = `
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Ticket #</th>
+                    <th>Title</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tickets.map(t => `
+                    <tr>
+                      <td><strong>${t.ticket_number}</strong></td>
+                      <td>${t.title}</td>
+                      <td><span class="priority-${t.priority}">${t.priority}</span></td>
+                      <td><span class="badge badge-${t.status}">${t.status}</span></td>
+                      <td>${new Date(t.created_at).toLocaleString()}</td>
+                      <td>${new Date(t.updated_at).toLocaleString()}</td>
+                      <td><a href="ticket-detail.html?id=${t.id}" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">Open</a></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else {
+          container.innerHTML = '<div class="alert alert-danger">Failed to load tickets.</div>';
+        }
+      } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">Unable to load tickets from server.</div>';
+      }
+    }
+
+    loadTickets();
+  </script>
+</body>
+</html>

@@ -27,3 +27,7 @@ Thumbs.db
 
 # Extracted text files (temporary)
 *_extracted.txt
+
+# Databases
+*.db
+*.sqlite3

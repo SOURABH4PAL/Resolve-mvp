@@ -1,15 +1,17 @@
-"""
-Application configuration using Pydantic BaseSettings.
-Reads from environment variables or .env file.
-"""
-
+import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+# Find .env in backend directory or current working directory
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_file_path = os.path.join(backend_dir, ".env")
+if not os.path.exists(env_file_path):
+    env_file_path = ".env"
 
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://resolvehub_user:resolvehub_pass@localhost:5432/resolvehub"
+    DATABASE_URL: str = "sqlite:///./resolvehub.db"
 
     # JWT
     SECRET_KEY: str = "change-this-to-a-random-secret-key-in-production"
@@ -25,7 +27,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     class Config:
-        env_file = ".env"
+        env_file = env_file_path
         case_sensitive = True
 
 

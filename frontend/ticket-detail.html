@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket Detail - ResolveHub</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <div class="container">
+    <div id="alert-box"></div>
+
+    <div class="card" id="ticket-header-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+        <div>
+          <span id="t-number" style="font-size: 0.9rem; color: var(--text-secondary); font-weight: bold;"></span>
+          <h2 id="t-title" style="margin: 0.2rem 0 0.5rem 0;">Loading Ticket...</h2>
+        </div>
+        <div>
+          <span id="t-status" class="badge"></span>
+          <span id="t-priority" style="margin-left: 0.5rem;"></span>
+        </div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border-color); margin: 1rem 0;">
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
+        <div><strong>Created By:</strong> <span id="t-creator"></span></div>
+        <div><strong>Category:</strong> <span id="t-category"></span></div>
+        <div><strong>Subcategory:</strong> <span id="t-subcategory"></span></div>
+        <div><strong>Created At:</strong> <span id="t-created"></span></div>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <h4 style="font-size: 0.95rem; margin-bottom: 0.4rem; color: var(--text-primary);">Description</h4>
+        <div id="t-desc" style="background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color); white-space: pre-wrap; font-size: 0.95rem;"></div>
+      </div>
+
+      <!-- Action buttons -->
+      <div id="action-buttons" style="margin-top: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- Status Change Modal / Section (Resolver / Admin) -->
+    <div class="card" id="status-update-card" style="display: none;">
+      <h3 class="card-title">Update Ticket Status</h3>
+      <form id="status-form" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+          <label style="font-size: 0.85rem; font-weight: 500;">New Status</label>
+          <select id="new-status" class="form-control" required>
+            <option value="OPEN">OPEN</option>
+            <option value="IN_PROGRESS">IN_PROGRESS</option>
+            <option value="WAITING_FOR_USER">WAITING_FOR_USER</option>
+            <option value="RESOLVED">RESOLVED</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+        </div>
+        <div style="flex: 2; min-width: 250px;">
+          <label style="font-size: 0.85rem; font-weight: 500;">Comment (Optional)</label>
+          <input type="text" id="status-comment" class="form-control" placeholder="Reason for status change...">
+        </div>
+        <button type="submit" class="btn btn-primary">Update Status</button>
+      </form>
+    </div>
+
+    <!-- Attachments Card -->
+    <div class="card">
+      <h3 class="card-title">Attachments</h3>
+      <div id="attachments-list" style="margin-bottom: 1rem;">No attachments yet.</div>
+
+      <form id="upload-form" style="display: flex; gap: 0.5rem; align-items: center;">
+        <input type="file" id="file-input" class="form-control" required style="width: auto;">
+        <button type="submit" class="btn btn-secondary">Upload File</button>
+      </form>
+    </div>
+
+    <!-- Comments Card -->
+    <div class="card">
+      <h3 class="card-title">Discussion & Comments</h3>
+      <div id="comments-list" style="margin-bottom: 1.5rem;">Loading comments...</div>
+
+      <form id="comment-form">
+        <div class="form-group">
+          <label for="comment-text">Add a Comment</label>
+          <textarea id="comment-text" class="form-control" required placeholder="Write your response..."></textarea>
+        </div>
+
+        <div id="internal-note-group" class="form-group" style="display: none;">
+          <label style="font-weight: normal; cursor: pointer;">
+            <input type="checkbox" id="is-internal"> Mark as Internal Note (hidden from employee)
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Post Comment</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    checkAuth();
+    renderNavbar();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const ticketId = urlParams.get('id');
+    const currentUser = getUser();
+
+    if (!ticketId) {
+      window.location.href = 'my-tickets.html';
+    }
+
+    async function loadTicket() {
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}`);
+        if (!res.ok) {
+          document.getElementById('alert-box').innerHTML = '<div class="alert alert-danger">Ticket not found or access denied.</div>';
+          return;
+        }
+
+        const t = await res.json();
+        document.getElementById('t-number').innerText = t.ticket_number;
+        document.getElementById('t-title').innerText = t.title;
+        document.getElementById('t-desc').innerText = t.description;
+        document.getElementById('t-status').innerText = t.status;
+        document.getElementById('t-status').className = `badge badge-${t.status}`;
+        document.getElementById('t-priority').innerText = t.priority;
+        document.getElementById('t-priority').className = `priority-${t.priority}`;
+        document.getElementById('t-creator').innerText = t.creator ? `${t.creator.name} (${t.creator.email})` : 'Unknown';
+        document.getElementById('t-category').innerText = t.category ? t.category.name : '-';
+        document.getElementById('t-subcategory').innerText = t.subcategory ? t.subcategory.name : '-';
+        document.getElementById('t-created').innerText = new Date(t.created_at).toLocaleString();
+
+        // Render Action Buttons
+        const actionsDiv = document.getElementById('action-buttons');
+        actionsDiv.innerHTML = '';
+
+        if (t.status !== 'CLOSED') {
+          if (currentUser.role === 'RESOLVER' || currentUser.role === 'SUPER_ADMIN') {
+            document.getElementById('status-update-card').style.display = 'block';
+            document.getElementById('new-status').value = t.status;
+            document.getElementById('internal-note-group').style.display = 'block';
+
+            if (t.status !== 'RESOLVED') {
+              actionsDiv.innerHTML += `<button class="btn btn-success" onclick="resolveTicket()">Resolve Ticket</button>`;
+            }
+          }
+
+          actionsDiv.innerHTML += `<button class="btn btn-danger" onclick="closeTicket()">Close Ticket</button>`;
+        } else {
+          document.getElementById('status-update-card').style.display = 'none';
+        }
+
+        loadComments();
+        loadAttachments();
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadComments() {
+      const listDiv = document.getElementById('comments-list');
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/comments`);
+        if (res.ok) {
+          const comments = await res.json();
+          if (comments.length === 0) {
+            listDiv.innerHTML = '<p style="color: var(--text-secondary);">No comments yet.</p>';
+            return;
+          }
+
+          listDiv.innerHTML = comments.map(c => `
+            <div style="background: ${c.is_internal ? '#fff7ed' : '#ffffff'}; border: 1px solid ${c.is_internal ? '#fdba74' : 'var(--border-color)'}; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                <span><strong>${c.user ? c.user.name : 'User'}</strong> ${c.is_internal ? '<span style="color: #c2410c; font-weight: bold;">[Internal Note]</span>' : ''}</span>
+                <span>${new Date(c.created_at).toLocaleString()}</span>
+              </div>
+              <div style="white-space: pre-wrap; font-size: 0.95rem;">${c.content}</div>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadAttachments() {
+      const listDiv = document.getElementById('attachments-list');
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/attachments`);
+        if (res.ok) {
+          const attachments = await res.json();
+          if (attachments.length === 0) {
+            listDiv.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">No files uploaded.</p>';
+            return;
+          }
+
+          listDiv.innerHTML = `<ul style="padding-left: 1.2rem;">` +
+            attachments.map(a => `
+              <li style="margin-bottom: 0.4rem; font-size: 0.9rem;">
+                <a href="${API_BASE}/attachments/${a.id}/download" target="_blank" style="color: var(--primary-color); font-weight: 500;">
+                  📄 ${a.file_name}
+                </a>
+                <span style="color: var(--text-secondary); font-size: 0.8rem;"> (${(a.file_size / 1024).toFixed(1)} KB - uploaded by ${a.uploader ? a.uploader.name : 'user'})</span>
+              </li>
+            `).join('') + `</ul>`;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById('comment-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const content = document.getElementById('comment-text').value.trim();
+      const is_internal = document.getElementById('is-internal') ? document.getElementById('is-internal').checked : false;
+
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/comments`, {
+          method: 'POST',
+          body: JSON.stringify({ content, is_internal })
+        });
+
+        if (res.ok) {
+          document.getElementById('comment-text').value = '';
+          if (document.getElementById('is-internal')) document.getElementById('is-internal').checked = false;
+          loadComments();
+        }
+      } catch (err) {
+        alert('Failed to add comment');
+      }
+    });
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById('file-input');
+      if (!fileInput.files[0]) return;
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/attachments`, {
+          method: 'POST',
+          body: formData,
+          isFormData: true
+        });
+
+        if (res.ok) {
+          fileInput.value = '';
+          loadAttachments();
+        } else {
+          const err = await res.json();
+          alert(err.detail || 'Upload failed');
+        }
+      } catch (err) {
+        alert('Failed to upload file');
+      }
+    });
+
+    document.getElementById('status-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('new-status').value;
+      const comment = document.getElementById('status-comment').value.trim();
+
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status, comment })
+        });
+
+        if (res.ok) {
+          document.getElementById('status-comment').value = '';
+          loadTicket();
+        }
+      } catch (err) {
+        alert('Failed to update status');
+      }
+    });
+
+    async function resolveTicket() {
+      const notes = prompt("Enter resolution notes:", "Issue resolved.");
+      if (notes === null) return;
+
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/resolve`, {
+          method: 'PUT',
+          body: JSON.stringify({ resolution_notes: notes })
+        });
+
+        if (res.ok) {
+          loadTicket();
+        }
+      } catch (err) {
+        alert('Failed to resolve ticket');
+      }
+    }
+
+    async function closeTicket() {
+      if (!confirm("Are you sure you want to close this ticket?")) return;
+
+      try {
+        const res = await apiFetch(`/tickets/${ticketId}/close`, {
+          method: 'PUT'
+        });
+
+        if (res.ok) {
+          loadTicket();
+        }
+      } catch (err) {
+        alert('Failed to close ticket');
+      }
+    }
+
+    loadTicket();
+  </script>
+</body>
+</html>

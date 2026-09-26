@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Ticket - ResolveHub</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <div class="container">
+    <div class="card">
+      <h2 class="card-title">Create Support Ticket</h2>
+      
+      <div id="alert-box"></div>
+
+      <form id="create-ticket-form">
+        <div class="form-group">
+          <label for="title">Title / Summary *</label>
+          <input type="text" id="title" class="form-control" required placeholder="Brief summary of the issue">
+        </div>
+
+        <div class="form-group">
+          <label for="category_id">Category *</label>
+          <select id="category_id" class="form-control" required>
+            <option value="">-- Select Category --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="subcategory_id">Subcategory (Optional)</label>
+          <select id="subcategory_id" class="form-control">
+            <option value="">-- Select Subcategory --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="priority">Priority *</label>
+          <select id="priority" class="form-control" required>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM" selected>Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Detailed Description *</label>
+          <textarea id="description" class="form-control" required placeholder="Provide all details about the problem..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 1rem;">
+          <button type="submit" class="btn btn-primary">Submit Ticket</button>
+          <a href="my-tickets.html" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    checkAuth();
+    renderNavbar();
+
+    async function loadCategories() {
+      try {
+        const res = await apiFetch('/categories');
+        if (res.ok) {
+          const categories = await res.json();
+          const catSelect = document.getElementById('category_id');
+          catSelect.innerHTML = '<option value="">-- Select Category --</option>' +
+            categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById('category_id').addEventListener('change', async (e) => {
+      const catId = e.target.value;
+      const subSelect = document.getElementById('subcategory_id');
+      subSelect.innerHTML = '<option value="">-- Select Subcategory --</option>';
+      if (!catId) return;
+
+      try {
+        const res = await apiFetch(`/subcategories?category_id=${catId}`);
+        if (res.ok) {
+          const subcats = await res.json();
+          subSelect.innerHTML = '<option value="">-- Select Subcategory --</option>' +
+            subcats.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    document.getElementById('create-ticket-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const category_id = document.getElementById('category_id').value;
+      const subcategory_id = document.getElementById('subcategory_id').value || null;
+      const priority = document.getElementById('priority').value;
+      const description = document.getElementById('description').value.trim();
+      const alertBox = document.getElementById('alert-box');
+
+      try {
+        const res = await apiFetch('/tickets', {
+          method: 'POST',
+          body: JSON.stringify({
+            title,
+            category_id,
+            subcategory_id,
+            priority,
+            description
+          })
+        });
+
+        if (res.ok) {
+          const ticket = await res.json();
+          alertBox.innerHTML = `<div class="alert alert-success">Ticket ${ticket.ticket_number} created successfully! Redirecting...</div>`;
+          setTimeout(() => {
+            window.location.href = `ticket-detail.html?id=${ticket.id}`;
+          }, 1000);
+        } else {
+          const err = await res.json();
+          alertBox.innerHTML = `<div class="alert alert-danger">${err.detail || 'Failed to create ticket'}</div>`;
+        }
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">Error submitting ticket</div>`;
+      }
+    });
+
+    loadCategories();
+  </script>
+</body>
+</html>

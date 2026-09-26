@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - ResolveHub</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <div class="container">
+    <div class="card">
+      <h2 id="welcome-msg" class="card-title">Welcome to ResolveHub</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+        ResolveHub MVP platform for managing enterprise support tickets effectively.
+      </p>
+
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="create-ticket.html" class="btn btn-primary">Create New Ticket</a>
+        <a href="my-tickets.html" class="btn btn-secondary">View My Tickets</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Recent Tickets</h3>
+      <div id="tickets-summary">Loading tickets...</div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    checkAuth();
+    renderNavbar();
+
+    const user = getUser();
+    if (user) {
+      document.getElementById('welcome-msg').innerText = `Welcome back, ${user.name}!`;
+    }
+
+    async function loadRecentTickets() {
+      try {
+        const res = await apiFetch('/tickets');
+        if (res.ok) {
+          const tickets = await res.json();
+          const summaryDiv = document.getElementById('tickets-summary');
+          if (tickets.length === 0) {
+            summaryDiv.innerHTML = '<p style="color: var(--text-secondary);">No tickets found. Click "Create New Ticket" to get started.</p>';
+            return;
+          }
+
+          const recent = tickets.slice(0, 5);
+          summaryDiv.innerHTML = `
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Ticket #</th>
+                    <th>Title</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recent.map(t => `
+                    <tr>
+                      <td><strong>${t.ticket_number}</strong></td>
+                      <td>${t.title}</td>
+                      <td><span class="priority-${t.priority}">${t.priority}</span></td>
+                      <td><span class="badge badge-${t.status}">${t.status}</span></td>
+                      <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                      <td><a href="ticket-detail.html?id=${t.id}" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">View</a></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadRecentTickets();
+  </script>
+</body>
+</html>
