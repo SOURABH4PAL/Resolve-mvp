@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.models.ticket import TicketPriority, TicketStatus
 from app.schemas.user import UserRead
 from app.schemas.category import CategoryRead
@@ -45,5 +45,4 @@ class TicketRead(BaseModel):
     category: Optional[CategoryRead] = None
     subcategory: Optional[SubcategoryRead] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,8 +1,11 @@
 import os
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request, status, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.routers import (
@@ -15,7 +18,10 @@ from app.routers import (
     categories_router,
     subcategories_router,
 )
-from app.database import engine, Base
+from app.database import engine
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("resolvehub")
 
 settings = get_settings()
 
@@ -26,14 +32,97 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Middleware
+# CORS Middleware (environment-driven, explicit origins without wildcard)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Centralized Exception Handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Uniform error response for HTTP exceptions."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "status_code": exc.status_code,
+        },
+        headers=getattr(exc, "headers", None) or None,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Uniform error response for request validation failures."""
+    formatted_errors = []
+    for error in exc.errors():
+        loc = " -> ".join(str(l) for l in error.get("loc", []))
+        formatted_errors.append({
+            "field": loc,
+            "message": error.get("msg", "Invalid value"),
+            "type": error.get("type", "value_error"),
+        })
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Request validation failed",
+            "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "errors": formatted_errors,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Catch-all error handler for unexpected 500 internal server errors."""
+    logger.error(f"Unexpected server error on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        },
+    )
+
+
+# Database-aware Health Check
+def perform_health_check():
+    db_status = "connected"
+    is_healthy = True
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.error(f"Health-check database ping failed: {exc}")
+        db_status = "disconnected"
+        is_healthy = False
+
+    payload = {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "database": db_status,
+        "version": "1.0.0",
+        "environment": settings.ENVIRONMENT,
+    }
+    status_code = status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(status_code=status_code, content=payload)
+
+
+@app.get("/health", tags=["Health"])
+def health():
+    """Root health-check endpoint verifying service and database status."""
+    return perform_health_check()
+
+
+@app.get(f"{settings.API_PREFIX}/health", tags=["Health"])
+def api_health():
+    """API health-check endpoint verifying service and database status."""
+    return perform_health_check()
+
 
 # Include API Routers
 app.include_router(auth_router, prefix=settings.API_PREFIX)
