@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
-import { Modal } from '../components/common/Modal';
-import { Select } from '../components/common/Select';
-import { TicketStatus, TicketPriority } from '../types';
+import { Ticket, TicketStatus, TicketComment, TicketAttachment } from '../types';
 import {
   ArrowLeft,
   Building,
@@ -17,48 +15,87 @@ import {
   Paperclip,
   Send,
   Lock,
-  Flame,
   FileCheck,
   CheckCircle2,
   CheckCheck,
   RotateCcw,
-  ArrowRightLeft,
-  AlertTriangle,
   Download,
   UploadCloud,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 export const TicketDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser, allUsers } = useAuth();
+  const { currentUser } = useAuth();
   const {
-    tickets,
     getTicketById,
     updateTicketStatus,
-    updateTicketPriority,
-    assignTicket,
+    resolveTicket,
+    closeTicket,
+    getComments,
     addComment,
-    addAttachment,
+    getAttachments,
+    uploadAttachment,
   } = useTickets();
 
-  const ticket = getTicketById(id || '');
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [comments, setComments] = useState<TicketComment[]>([]);
+  const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Form states
   const [commentText, setCommentText] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [escalateModalOpen, setEscalateModalOpen] = useState(false);
-  const [selectedAssignee, setSelectedAssignee] = useState('');
-  const [escalationReason, setEscalationReason] = useState('');
-  const [escalated, setEscalated] = useState(false);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
 
-  if (!ticket) {
+  const loadTicketData = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const ticketData = await getTicketById(id);
+      setTicket(ticketData);
+
+      // Load comments & attachments in parallel
+      const [commentsData, attachmentsData] = await Promise.all([
+        getComments(ticketData.id).catch(() => []),
+        getAttachments(ticketData.id).catch(() => []),
+      ]);
+      setComments(commentsData || []);
+      setAttachments(attachmentsData || []);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load ticket details';
+      setError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, getTicketById, getComments, getAttachments]);
+
+  useEffect(() => {
+    loadTicketData();
+  }, [loadTicketData]);
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-slate-500)' }}>
+        <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+        <p>Loading ticket details from backend...</p>
+      </div>
+    );
+  }
+
+  if (error || !ticket) {
     return (
       <div className="empty-state">
+        <AlertCircle size={32} style={{ color: '#ef4444', margin: '0 auto 12px' }} />
         <h3 className="empty-state-title">Ticket Not Found</h3>
         <p className="empty-state-text">
-          No ticket matching "{id}" could be located in ResolveHub.
+          {error || `No ticket matching "${id}" could be located on the server.`}
         </p>
         <Button variant="primary" onClick={() => navigate('/dashboard')}>
           Back to Dashboard
@@ -68,46 +105,61 @@ export const TicketDetailsPage: React.FC = () => {
   }
 
   const isStaff = currentUser?.role === 'RESOLVER' || currentUser?.role === 'SUPER_ADMIN';
-  const isCreator = currentUser?.id === ticket.created_by;
 
-  const handleSendComment = (e: React.FormEvent) => {
+  const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    addComment(ticket.id, commentText, isInternalNote);
-    setCommentText('');
-    setIsInternalNote(false);
+
+    setIsPostingComment(true);
+    try {
+      const newComment = await addComment(ticket.id, commentText.trim(), isInternalNote);
+      setComments(prev => [...prev, newComment]);
+      setCommentText('');
+      setIsInternalNote(false);
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+      alert('Failed to post comment to server.');
+    } finally {
+      setIsPostingComment(false);
+    }
   };
 
-  const handleStatusChange = (newStatus: TicketStatus) => {
-    updateTicketStatus(ticket.id, newStatus);
+  const handleStatusChange = async (newStatus: TicketStatus) => {
+    setStatusLoading(true);
+    try {
+      let updated: Ticket;
+      if (newStatus === 'RESOLVED') {
+        updated = await resolveTicket(ticket.id, 'Issue resolved by staff.');
+      } else if (newStatus === 'CLOSED') {
+        updated = await closeTicket(ticket.id);
+      } else {
+        updated = await updateTicketStatus(ticket.id, newStatus);
+      }
+      setTicket(updated);
+      // Reload comments to reflect system status comment created by backend
+      const freshComments = await getComments(ticket.id);
+      setComments(freshComments || []);
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update status on server.');
+    } finally {
+      setStatusLoading(false);
+    }
   };
 
-  const handlePriorityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    updateTicketPriority(ticket.id, e.target.value as TicketPriority);
-  };
-
-  const handleAssignConfirm = () => {
-    if (!selectedAssignee) return;
-    assignTicket(ticket.id, selectedAssignee);
-    setAssignModalOpen(false);
-  };
-
-  const handleConfirmEscalation = () => {
-    if (!escalationReason.trim()) return;
-    setEscalated(true);
-    setEscalateModalOpen(false);
-    addComment(
-      ticket.id,
-      `[USER ESCALATION]: Ticket highlighted by ${currentUser?.name}. Reason: ${escalationReason.trim()}`,
-      false
-    );
-  };
-
-  const handleSimulatedAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const sizeStr = `${(file.size / 1024).toFixed(0)} KB`;
-      addAttachment(ticket.id, file.name, sizeStr);
+      setIsUploading(true);
+      try {
+        const newAtt = await uploadAttachment(ticket.id, file);
+        setAttachments(prev => [...prev, newAtt]);
+      } catch (err) {
+        console.error('Failed to upload file:', err);
+        alert('File upload failed. Ensure size is within 10MB limit.');
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -126,10 +178,11 @@ export const TicketDetailsPage: React.FC = () => {
     }
   };
 
-  const resolverOptions = allUsers.map(u => ({
-    value: u.id,
-    label: `${u.name} (${u.role.replace('_', ' ')} - ${u.department_name})`,
-  }));
+  const departmentName = ticket.category?.department?.name || 'Department';
+  const categoryName = ticket.category?.name || 'General';
+  const creatorName = ticket.creator?.name || 'Employee';
+  const creatorEmail = ticket.creator?.email || '—';
+  const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned');
 
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto' }}>
@@ -158,7 +211,7 @@ export const TicketDetailsPage: React.FC = () => {
         style={{
           marginBottom: 24,
           borderLeft: `4px solid ${
-            ticket.priority === 'URGENT'
+            ticket.priority === 'CRITICAL'
               ? '#ef4444'
               : ticket.priority === 'HIGH'
               ? '#f97316'
@@ -182,11 +235,11 @@ export const TicketDetailsPage: React.FC = () => {
                 </span>
                 <span style={{ color: 'var(--color-slate-300)' }}>•</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-slate-600)' }}>
-                  {ticket.department_name}
+                  {departmentName}
                 </span>
                 <span style={{ color: 'var(--color-slate-300)' }}>•</span>
                 <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-500)' }}>
-                  {ticket.category_name}
+                  {categoryName}
                 </span>
               </div>
               <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--color-slate-900)', lineHeight: 1.35 }}>
@@ -219,10 +272,11 @@ export const TicketDetailsPage: React.FC = () => {
                 Lifecycle:
               </span>
 
-              {ticket.status === 'OPEN' && (
+              {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED') && (
                 <Button
                   variant="primary"
                   size="sm"
+                  isLoading={statusLoading}
                   leftIcon={<Clock size={14} />}
                   onClick={() => handleStatusChange('IN_PROGRESS')}
                 >
@@ -234,6 +288,7 @@ export const TicketDetailsPage: React.FC = () => {
                 <Button
                   variant="primary"
                   size="sm"
+                  isLoading={statusLoading}
                   leftIcon={<CheckCircle2 size={14} />}
                   onClick={() => handleStatusChange('RESOLVED')}
                 >
@@ -246,6 +301,7 @@ export const TicketDetailsPage: React.FC = () => {
                   <Button
                     variant="primary"
                     size="sm"
+                    isLoading={statusLoading}
                     leftIcon={<CheckCheck size={14} />}
                     onClick={() => handleStatusChange('CLOSED')}
                   >
@@ -254,8 +310,9 @@ export const TicketDetailsPage: React.FC = () => {
                   <Button
                     variant="secondary"
                     size="sm"
+                    isLoading={statusLoading}
                     leftIcon={<RotateCcw size={14} />}
-                    onClick={() => handleStatusChange('IN_PROGRESS')}
+                    onClick={() => handleStatusChange('REOPENED')}
                   >
                     Reopen Issue
                   </Button>
@@ -266,56 +323,24 @@ export const TicketDetailsPage: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="sm"
+                  isLoading={statusLoading}
                   leftIcon={<RotateCcw size={14} />}
-                  onClick={() => handleStatusChange('OPEN')}
+                  onClick={() => handleStatusChange('REOPENED')}
                 >
                   Reopen Ticket
                 </Button>
               )}
 
-              {/* Assign button */}
-              {isStaff && (
+              {ticket.status === 'REOPENED' && (
                 <Button
-                  variant="secondary"
+                  variant="primary"
                   size="sm"
-                  leftIcon={<ArrowRightLeft size={14} />}
-                  onClick={() => setAssignModalOpen(true)}
+                  isLoading={statusLoading}
+                  leftIcon={<Clock size={14} />}
+                  onClick={() => handleStatusChange('IN_PROGRESS')}
                 >
-                  {ticket.assigned_to ? 'Reassign' : 'Assign Resolver'}
+                  Resume Work
                 </Button>
-              )}
-            </div>
-
-            {/* User Highlight / Escalate Action */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isCreator && ticket.status !== 'CLOSED' && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={<Flame size={14} style={{ color: '#ef4444' }} />}
-                  onClick={() => setEscalateModalOpen(true)}
-                  disabled={escalated}
-                >
-                  {escalated ? 'Ticket Escalated' : 'Highlight / Escalate'}
-                </Button>
-              )}
-
-              {/* Change Priority dropdown (Staff / Admin) */}
-              {isStaff && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>Priority:</span>
-                  <select
-                    className="form-select"
-                    style={{ padding: '4px 8px', fontSize: '0.8rem', width: 110 }}
-                    value={ticket.priority}
-                    onChange={handlePriorityChange}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
-                  </select>
-                </div>
               )}
             </div>
           </div>
@@ -344,33 +369,34 @@ export const TicketDetailsPage: React.FC = () => {
                 <Paperclip size={18} style={{ color: 'var(--color-primary-600)' }} />
                 <h3 className="card-title">Supporting Attachments</h3>
                 <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-400)' }}>
-                  ({ticket.attachments?.length || 0})
+                  ({attachments.length})
                 </span>
               </div>
 
               {/* Add attachment button */}
               <label
                 className="btn btn-secondary btn-sm"
-                style={{ cursor: 'pointer', margin: 0 }}
+                style={{ cursor: isUploading ? 'not-allowed' : 'pointer', margin: 0 }}
               >
                 <UploadCloud size={14} />
-                Attach File
+                {isUploading ? 'Uploading...' : 'Attach File'}
                 <input
                   type="file"
+                  disabled={isUploading}
                   style={{ display: 'none' }}
-                  onChange={handleSimulatedAttachment}
+                  onChange={handleFileUpload}
                 />
               </label>
             </div>
 
             <div className="card-body">
-              {!ticket.attachments || ticket.attachments.length === 0 ? (
+              {attachments.length === 0 ? (
                 <div style={{ fontSize: '0.85rem', color: 'var(--color-slate-400)', textAlign: 'center', padding: '16px 0' }}>
                   No files attached to this ticket.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                  {ticket.attachments.map(att => (
+                  {attachments.map(att => (
                     <div
                       key={att.id}
                       style={{
@@ -390,19 +416,20 @@ export const TicketDetailsPage: React.FC = () => {
                             {att.file_name}
                           </div>
                           <div style={{ fontSize: '0.725rem', color: 'var(--color-slate-500)' }}>
-                            {att.file_size} • Stored on OneDrive: <span style={{ fontFamily: 'monospace' }}>{att.file_path}</span>
+                            {(att.file_size / 1024).toFixed(0)} KB • Uploaded by {att.uploader?.name || 'User'}
                           </div>
                         </div>
                       </div>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={<Download size={14} />}
-                        onClick={() => alert(`Simulated downloading ${att.file_name} from OneDrive reference.`)}
+                      <a
+                        href={`/api/attachments/${att.id}/download`}
+                        download={att.file_name}
+                        className="btn btn-ghost btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                       >
+                        <Download size={14} />
                         Download
-                      </Button>
+                      </a>
                     </div>
                   ))}
                 </div>
@@ -415,20 +442,20 @@ export const TicketDetailsPage: React.FC = () => {
             <div className="card-header">
               <h3 className="card-title">Activity & Discussion</h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
-                {ticket.comments?.length || 0} messages
+                {comments.length} messages
               </span>
             </div>
 
             <div className="card-body">
               {/* Comment Thread */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-                {(!ticket.comments || ticket.comments.length === 0) ? (
+                {comments.length === 0 ? (
                   <div style={{ fontSize: '0.85rem', color: 'var(--color-slate-400)', textAlign: 'center', padding: '16px 0' }}>
                     No comments yet. Start the conversation below.
                   </div>
                 ) : (
-                  ticket.comments.map(c => {
-                    const isStaffComment = c.user_role === 'RESOLVER' || c.user_role === 'SUPER_ADMIN';
+                  comments.map(c => {
+                    const isStaffComment = c.user?.role === 'RESOLVER' || c.user?.role === 'SUPER_ADMIN';
                     return (
                       <div
                         key={c.id}
@@ -442,20 +469,22 @@ export const TicketDetailsPage: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-slate-900)' }}>
-                              {c.user_name}
+                              {c.user?.name || 'User'}
                             </span>
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                fontWeight: 600,
-                                padding: '1px 6px',
-                                borderRadius: 'var(--radius-sm)',
-                                backgroundColor: isStaffComment ? 'var(--color-primary-100)' : 'var(--color-slate-100)',
-                                color: isStaffComment ? 'var(--color-primary-800)' : 'var(--color-slate-700)',
-                              }}
-                            >
-                              {c.user_role.replace('_', ' ')}
-                            </span>
+                            {c.user?.role && (
+                              <span
+                                style={{
+                                  fontSize: '0.7rem',
+                                  fontWeight: 600,
+                                  padding: '1px 6px',
+                                  borderRadius: 'var(--radius-sm)',
+                                  backgroundColor: isStaffComment ? 'var(--color-primary-100)' : 'var(--color-slate-100)',
+                                  color: isStaffComment ? 'var(--color-primary-800)' : 'var(--color-slate-700)',
+                                }}
+                              >
+                                {c.user.role.replace('_', ' ')}
+                              </span>
+                            )}
                             {c.is_internal && (
                               <span
                                 style={{
@@ -477,7 +506,7 @@ export const TicketDetailsPage: React.FC = () => {
                         </div>
 
                         <p style={{ fontSize: '0.875rem', color: 'var(--color-slate-700)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                          {c.comment}
+                          {c.content}
                         </p>
                       </div>
                     );
@@ -522,6 +551,7 @@ export const TicketDetailsPage: React.FC = () => {
                     type="submit"
                     variant="primary"
                     disabled={!commentText.trim()}
+                    isLoading={isPostingComment}
                     rightIcon={<Send size={14} />}
                   >
                     Post Message
@@ -546,7 +576,7 @@ export const TicketDetailsPage: React.FC = () => {
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--color-slate-800)' }}>
                   <Building size={14} style={{ color: 'var(--color-primary-600)' }} />
-                  {ticket.department_name}
+                  {departmentName}
                 </div>
               </div>
 
@@ -555,7 +585,7 @@ export const TicketDetailsPage: React.FC = () => {
                   Issue Category
                 </span>
                 <div style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>
-                  {ticket.category_name}
+                  {categoryName}
                 </div>
               </div>
 
@@ -565,10 +595,10 @@ export const TicketDetailsPage: React.FC = () => {
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--color-slate-800)' }}>
                   <User size={14} style={{ color: 'var(--color-slate-500)' }} />
-                  {ticket.creator_name}
+                  {creatorName}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-                  {ticket.creator_email}
+                  {creatorEmail}
                 </div>
               </div>
 
@@ -576,8 +606,8 @@ export const TicketDetailsPage: React.FC = () => {
                 <span style={{ color: 'var(--color-slate-400)', display: 'block', marginBottom: 2 }}>
                   Assigned Resolver
                 </span>
-                <div style={{ fontWeight: 600, color: ticket.assignee_name ? 'var(--color-slate-900)' : 'var(--color-slate-400)' }}>
-                  {ticket.assignee_name || 'Unassigned'}
+                <div style={{ fontWeight: 600, color: ticket.assignee ? 'var(--color-slate-900)' : 'var(--color-slate-400)' }}>
+                  {assigneeName}
                 </div>
               </div>
 
@@ -616,84 +646,6 @@ export const TicketDetailsPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Assignee Modal */}
-      <Modal
-        isOpen={assignModalOpen}
-        onClose={() => setAssignModalOpen(false)}
-        title={`Assign Resolver to ${ticket.ticket_number}`}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setAssignModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" disabled={!selectedAssignee} onClick={handleAssignConfirm}>
-              Assign Resolver
-            </Button>
-          </>
-        }
-      >
-        <Select
-          label="Select Staff Resolver"
-          placeholder="-- Choose Resolver --"
-          value={selectedAssignee}
-          onChange={e => setSelectedAssignee(e.target.value)}
-          options={resolverOptions}
-          required
-        />
-      </Modal>
-
-      {/* Escalation Modal (BRD Section 6.6) */}
-      <Modal
-        isOpen={escalateModalOpen}
-        onClose={() => setEscalateModalOpen(false)}
-        title="Highlight / Escalate Ticket"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEscalateModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              disabled={!escalationReason.trim()}
-              onClick={handleConfirmEscalation}
-            >
-              Confirm Escalation
-            </Button>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div
-            style={{
-              padding: '12px 14px',
-              backgroundColor: '#fffbeb',
-              border: '1px solid #fde68a',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.825rem',
-              color: '#92400e',
-              display: 'flex',
-              gap: 8,
-            }}
-          >
-            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-            <span>
-              Per BRD Section 6.6: Highlighting notifies department resolver leads and supervisors that this issue has not been solved within the expected timeframe.
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label required">Reason for Escalation</label>
-            <textarea
-              className="form-textarea"
-              placeholder="e.g. Critical customer presentation in 2 hours and network connectivity is still broken..."
-              rows={3}
-              value={escalationReason}
-              onChange={e => setEscalationReason(e.target.value)}
-            />
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };

@@ -14,15 +14,15 @@ import { useTickets } from '../../context/TicketContext';
 
 export const Sidebar: React.FC = () => {
   const { currentUser } = useAuth();
-  const { tickets, notifications } = useTickets();
+  const { tickets } = useTickets();
 
   const myTicketsCount = tickets.filter(t => t.created_by === currentUser?.id).length;
   const assignedToMeCount = tickets.filter(
     t => t.assigned_to === currentUser?.id && t.status !== 'CLOSED'
   ).length;
-  const unreadNotifsCount = notifications.filter(n => !n.is_read).length;
 
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(n => n[0])
@@ -91,14 +91,6 @@ export const Sidebar: React.FC = () => {
         >
           <Bell size={18} />
           <span>Notifications</span>
-          {unreadNotifsCount > 0 && (
-            <span
-              className="nav-badge"
-              style={{ backgroundColor: '#fee2e2', color: '#b91c1c' }}
-            >
-              {unreadNotifsCount}
-            </span>
-          )}
         </NavLink>
 
         <NavLink

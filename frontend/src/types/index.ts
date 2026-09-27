@@ -6,54 +6,75 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  department_id: string;
-  department_name: string;
+  department_id?: string | null;
   is_active: boolean;
-  avatar_url?: string;
   created_at: string;
+  updated_at: string;
+  department?: Department | null;
 }
 
 export interface Department {
   id: string;
   name: string;
-  department_email: string;
+  department_email?: string | null;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Category {
   id: string;
   department_id: string;
   name: string;
-  description: string;
+  description?: string | null;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
+  department?: Department | null;
 }
 
-export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export interface Subcategory {
+  id: string;
+  category_id: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TicketStatus =
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'WAITING_FOR_USER'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'REOPENED';
+
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface TicketAttachment {
   id: string;
   ticket_id: string;
   uploaded_by: string;
-  uploader_name: string;
   file_name: string;
   file_path: string;
-  file_size: string;
+  file_size: number;
+  mime_type?: string | null;
   created_at: string;
+  uploader?: User | null;
 }
 
 export interface TicketComment {
   id: string;
   ticket_id: string;
   user_id: string;
-  user_name: string;
-  user_role: UserRole;
-  comment: string;
-  is_internal?: boolean;
+  content: string;
+  is_internal: boolean;
   created_at: string;
+  updated_at: string;
+  user?: User | null;
 }
 
 export interface Ticket {
@@ -62,21 +83,29 @@ export interface Ticket {
   title: string;
   description: string;
   created_by: string;
-  creator_name: string;
-  creator_email: string;
   category_id: string;
-  category_name: string;
-  department_id: string;
-  department_name: string;
+  subcategory_id?: string | null;
   assigned_to?: string | null;
-  assignee_name?: string | null;
   priority: TicketPriority;
   status: TicketStatus;
+  resolved_at?: string | null;
+  closed_at?: string | null;
   created_at: string;
   updated_at: string;
-  resolved_at?: string | null;
+  creator?: User | null;
+  assignee?: User | null;
+  category?: Category | null;
+  subcategory?: Subcategory | null;
   comments?: TicketComment[];
   attachments?: TicketAttachment[];
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  role: UserRole;
+  user_id: string;
+  name: string;
 }
 
 export interface NotificationItem {

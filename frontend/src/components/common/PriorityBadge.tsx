@@ -1,6 +1,6 @@
 import React from 'react';
 import { TicketPriority } from '../../types';
-import { ArrowDown, Minus, ArrowUp, Flame } from 'lucide-react';
+import { ArrowDown, Minus, ArrowUp, AlertTriangle } from 'lucide-react';
 
 export interface PriorityBadgeProps {
   priority: TicketPriority;
@@ -28,15 +28,15 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, showIcon
           className: 'priority-badge-high',
           icon: <ArrowUp size={12} />,
         };
-      case 'URGENT':
+      case 'CRITICAL':
         return {
-          label: 'Urgent',
+          label: 'Critical',
           className: 'priority-badge-urgent',
-          icon: <Flame size={12} />,
+          icon: <AlertTriangle size={12} />,
         };
       default:
         return {
-          label: priority,
+          label: String(priority),
           className: 'priority-badge-medium',
           icon: <Minus size={12} />,
         };

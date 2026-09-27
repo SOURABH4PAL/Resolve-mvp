@@ -5,7 +5,25 @@ import { Navbar } from './Navbar';
 import { useAuth } from '../../context/AuthContext';
 
 export const AppLayout: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          backgroundColor: 'var(--color-slate-50)',
+          color: 'var(--color-slate-500)',
+          fontSize: '0.9rem',
+        }}
+      >
+        <p>Verifying authentication session...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

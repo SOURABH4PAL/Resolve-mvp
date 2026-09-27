@@ -1,6 +1,6 @@
 import React from 'react';
 import { TicketStatus } from '../../types';
-import { Clock, CheckCircle2, AlertCircle, CheckCheck } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, CheckCheck, UserCheck, HelpCircle, RotateCcw } from 'lucide-react';
 
 export interface StatusBadgeProps {
   status: TicketStatus;
@@ -16,11 +16,23 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showIcon = tru
           className: 'status-badge-open',
           icon: <AlertCircle size={12} />,
         };
+      case 'ASSIGNED':
+        return {
+          label: 'Assigned',
+          className: 'status-badge-open',
+          icon: <UserCheck size={12} />,
+        };
       case 'IN_PROGRESS':
         return {
           label: 'In Progress',
           className: 'status-badge-in_progress',
           icon: <Clock size={12} />,
+        };
+      case 'WAITING_FOR_USER':
+        return {
+          label: 'Waiting for User',
+          className: 'status-badge-in_progress',
+          icon: <HelpCircle size={12} />,
         };
       case 'RESOLVED':
         return {
@@ -34,9 +46,15 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showIcon = tru
           className: 'status-badge-closed',
           icon: <CheckCheck size={12} />,
         };
+      case 'REOPENED':
+        return {
+          label: 'Reopened',
+          className: 'status-badge-in_progress',
+          icon: <RotateCcw size={12} />,
+        };
       default:
         return {
-          label: status,
+          label: String(status).replace('_', ' '),
           className: 'status-badge-open',
           icon: <AlertCircle size={12} />,
         };

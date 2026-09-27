@@ -16,25 +16,28 @@ import {
   Flame,
   ArrowRight,
   UserCheck,
+  RefreshCw,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const { tickets } = useTickets();
+  const { tickets, isLoadingTickets, fetchTickets } = useTickets();
   const navigate = useNavigate();
 
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
   // Stats calculation
   const totalCount = tickets.length;
-  const openCount = tickets.filter(t => t.status === 'OPEN').length;
-  const inProgressCount = tickets.filter(t => t.status === 'IN_PROGRESS').length;
+  const openCount = tickets.filter(t => t.status === 'OPEN' || t.status === 'ASSIGNED').length;
+  const inProgressCount = tickets.filter(
+    t => t.status === 'IN_PROGRESS' || t.status === 'WAITING_FOR_USER' || t.status === 'REOPENED'
+  ).length;
   const resolvedCount = tickets.filter(t => t.status === 'RESOLVED' || t.status === 'CLOSED').length;
   const assignedToMeCount = tickets.filter(
     t => t.assigned_to === currentUser?.id && t.status !== 'CLOSED'
   ).length;
-  const urgentCount = tickets.filter(
-    t => t.priority === 'URGENT' && t.status !== 'CLOSED'
+  const criticalCount = tickets.filter(
+    t => t.priority === 'CRITICAL' && t.status !== 'CLOSED'
   ).length;
 
   // Filtered tickets
@@ -47,7 +50,7 @@ export const DashboardPage: React.FC = () => {
     {
       key: 'ticket_number',
       header: 'Ticket ID',
-      width: '110px',
+      width: '120px',
       render: ticket => (
         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-primary-600)' }}>
           {ticket.ticket_number}
@@ -57,16 +60,20 @@ export const DashboardPage: React.FC = () => {
     {
       key: 'title',
       header: 'Subject & Category',
-      render: ticket => (
-        <div>
-          <div style={{ fontWeight: 600, color: 'var(--color-slate-900)', marginBottom: 2 }}>
-            {ticket.title}
+      render: ticket => {
+        const deptName = ticket.category?.department?.name || 'Department';
+        const catName = ticket.category?.name || 'General';
+        return (
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--color-slate-900)', marginBottom: 2 }}>
+              {ticket.title}
+            </div>
+            <div style={{ fontSize: '0.775rem', color: 'var(--color-slate-500)' }}>
+              {deptName} • {catName}
+            </div>
           </div>
-          <div style={{ fontSize: '0.775rem', color: 'var(--color-slate-500)' }}>
-            {ticket.department_name} • {ticket.category_name}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'priority',
@@ -77,18 +84,21 @@ export const DashboardPage: React.FC = () => {
     {
       key: 'status',
       header: 'Status',
-      width: '130px',
+      width: '140px',
       render: ticket => <StatusBadge status={ticket.status} />,
     },
     {
       key: 'assigned_to',
       header: 'Assignee',
       width: '160px',
-      render: ticket => (
-        <span style={{ fontSize: '0.85rem', color: ticket.assignee_name ? 'var(--color-slate-800)' : 'var(--color-slate-400)' }}>
-          {ticket.assignee_name || 'Unassigned'}
-        </span>
-      ),
+      render: ticket => {
+        const name = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned');
+        return (
+          <span style={{ fontSize: '0.85rem', color: ticket.assignee ? 'var(--color-slate-800)' : 'var(--color-slate-400)' }}>
+            {name}
+          </span>
+        );
+      },
     },
     {
       key: 'created_at',
@@ -109,9 +119,9 @@ export const DashboardPage: React.FC = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation();
-            navigate(`/tickets/${ticket.ticket_number}`);
+            navigate(`/tickets/${ticket.id}`);
           }}
         >
           View
@@ -129,10 +139,18 @@ export const DashboardPage: React.FC = () => {
             Welcome back, {currentUser?.name?.split(' ')[0] || 'User'}
           </h1>
           <p className="page-subtitle">
-            Overview of department issues, active service requests, and resolution progress.
+            Live overview of department issues, active service requests, and resolution progress.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <Button
+            variant="secondary"
+            leftIcon={<RefreshCw size={15} />}
+            isLoading={isLoadingTickets}
+            onClick={() => fetchTickets()}
+          >
+            Refresh
+          </Button>
           <Button
             variant="primary"
             leftIcon={<PlusCircle size={17} />}
@@ -143,8 +161,8 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Urgent Attention Alert if applicable */}
-      {urgentCount > 0 && (
+      {/* Critical Attention Alert */}
+      {criticalCount > 0 && (
         <div
           style={{
             backgroundColor: '#fef2f2',
@@ -175,10 +193,10 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#991b1b' }}>
-                {urgentCount} Urgent Issue Requires Immediate Attention
+                {criticalCount} Critical Issue Requires Immediate Attention
               </div>
               <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>
-                High business impact incidents flagged with critical SLA policies.
+                High business impact incidents flagged with critical priority.
               </div>
             </div>
           </div>
@@ -186,11 +204,11 @@ export const DashboardPage: React.FC = () => {
             variant="danger"
             size="sm"
             onClick={() => {
-              const urgentTicket = tickets.find(t => t.priority === 'URGENT');
-              if (urgentTicket) navigate(`/tickets/${urgentTicket.ticket_number}`);
+              const criticalTicket = tickets.find(t => t.priority === 'CRITICAL');
+              if (criticalTicket) navigate(`/tickets/${criticalTicket.id}`);
             }}
           >
-            Inspect Urgent Ticket
+            Inspect Critical Ticket
           </Button>
         </div>
       )}
@@ -216,7 +234,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div>
             <div className="stat-val">{openCount}</div>
-            <div className="stat-label">Open / New</div>
+            <div className="stat-label">Open / Assigned</div>
           </div>
         </div>
 
@@ -262,13 +280,22 @@ export const DashboardPage: React.FC = () => {
           <div>
             <h3 className="card-title">Recent Tickets</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-              Track ticket lifecycle, assigned resolvers, and issue progress.
+              Track live ticket lifecycle, assigned resolvers, and issue progress from the backend.
             </p>
           </div>
 
           {/* Status Filter Tabs */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['ALL', 'OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'] as (string | TicketStatus)[]).map(status => (
+            {[
+              'ALL',
+              'OPEN',
+              'ASSIGNED',
+              'IN_PROGRESS',
+              'WAITING_FOR_USER',
+              'RESOLVED',
+              'CLOSED',
+              'REOPENED',
+            ].map(status => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
@@ -285,7 +312,7 @@ export const DashboardPage: React.FC = () => {
                   transition: 'all 0.15s ease',
                 }}
               >
-                {status === 'ALL' ? 'All Tickets' : status.replace('_', ' ')}
+                {status === 'ALL' ? 'All Tickets' : status.replace(/_/g, ' ')}
               </button>
             ))}
           </div>
@@ -295,8 +322,12 @@ export const DashboardPage: React.FC = () => {
           columns={columns}
           data={filteredTickets}
           keyExtractor={t => t.id}
-          onRowClick={t => navigate(`/tickets/${t.ticket_number}`)}
-          emptyMessage="No tickets matching the selected filter."
+          onRowClick={t => navigate(`/tickets/${t.id}`)}
+          emptyMessage={
+            isLoadingTickets
+              ? 'Loading tickets from backend...'
+              : 'No tickets found matching the selected filter.'
+          }
         />
 
         <div

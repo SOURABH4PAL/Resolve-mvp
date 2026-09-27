@@ -1,62 +1,99 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
-import { MOCK_USERS } from '../mock/mockData';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User, AuthResponse } from '../types';
+import { api, TOKEN_STORAGE_KEY } from '../api/client';
 
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
-  login: (email: string, role?: string) => boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  switchUser: (userId: string) => void;
-  allUsers: User[];
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'resolvehub_current_user_id';
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const savedUserId = localStorage.getItem(STORAGE_KEY);
-    if (savedUserId) {
-      const found = MOCK_USERS.find(u => u.id === savedUserId);
-      if (found) return found;
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const fetchCurrentUser = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      setCurrentUser(null);
+      setIsLoading(false);
+      return;
     }
-    // Default to Employee Alex Morgan
-    return MOCK_USERS[0];
-  });
+
+    try {
+      const user = await api.get<User>('/users/me');
+      setCurrentUser(user);
+    } catch {
+      // Token expired or invalid
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      setCurrentUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(STORAGE_KEY, currentUser.id);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [currentUser]);
+    fetchCurrentUser();
 
-  const login = (email: string): boolean => {
-    const user = MOCK_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (user) {
-      setCurrentUser(user);
-      return true;
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+    };
+
+    window.addEventListener('resolvehub:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('resolvehub:unauthorized', handleUnauthorized);
+    };
+  }, [fetchCurrentUser]);
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const authData = await api.post<AuthResponse>('/auth/login', {
+        email: email.trim(),
+        password,
+      });
+
+      if (authData.access_token) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, authData.access_token);
+        // Retrieve full profile from /api/users/me
+        try {
+          const user = await api.get<User>('/users/me');
+          setCurrentUser(user);
+        } catch {
+          // Fallback user object from token response if /users/me has transient delay
+          setCurrentUser({
+            id: authData.user_id,
+            employee_id: authData.user_id,
+            name: authData.name,
+            email: email.trim(),
+            role: authData.role,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+        return true;
+      }
+      return false;
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-    // If not matching email, default to first user or mock demo
-    if (email.trim().length > 0) {
-      setCurrentUser(MOCK_USERS[0]);
-      return true;
-    }
-    return false;
   };
 
   const logout = () => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     setCurrentUser(null);
   };
 
-  const switchUser = (userId: string) => {
-    const user = MOCK_USERS.find(u => u.id === userId);
-    if (user) {
-      setCurrentUser(user);
-    }
+  const refreshUser = async () => {
+    await fetchCurrentUser();
   };
 
   return (
@@ -64,10 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         currentUser,
         isAuthenticated: !!currentUser,
+        isLoading,
         login,
         logout,
-        switchUser,
-        allUsers: MOCK_USERS,
+        refreshUser,
       }}
     >
       {children}

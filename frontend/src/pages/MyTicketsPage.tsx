@@ -7,19 +7,19 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Table, Column } from '../components/common/Table';
 import { TicketCard } from '../components/common/TicketCard';
-import { Ticket, TicketStatus, TicketPriority } from '../types';
+import { Ticket } from '../types';
 import {
   PlusCircle,
   Search,
-  Filter,
   LayoutGrid,
   List,
   Inbox,
+  RefreshCw,
 } from 'lucide-react';
 
 export const MyTicketsPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const { tickets } = useTickets();
+  const { tickets, isLoadingTickets, fetchTickets } = useTickets();
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,7 +27,7 @@ export const MyTicketsPage: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
-  // Filter by user created
+  // Filter by current user
   const myTickets = tickets.filter(t => t.created_by === currentUser?.id);
 
   // Search and filter
@@ -36,7 +36,7 @@ export const MyTicketsPage: React.FC = () => {
       ticket.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.ticket_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.category_name.toLowerCase().includes(searchTerm.toLowerCase());
+      (ticket.category?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' || ticket.status === statusFilter;
     const matchesPriority = priorityFilter === 'ALL' || ticket.priority === priorityFilter;
@@ -48,7 +48,7 @@ export const MyTicketsPage: React.FC = () => {
     {
       key: 'ticket_number',
       header: 'Ticket ID',
-      width: '110px',
+      width: '120px',
       render: ticket => (
         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-primary-600)' }}>
           {ticket.ticket_number}
@@ -58,14 +58,18 @@ export const MyTicketsPage: React.FC = () => {
     {
       key: 'title',
       header: 'Title & Department',
-      render: ticket => (
-        <div>
-          <div style={{ fontWeight: 600, color: 'var(--color-slate-900)' }}>{ticket.title}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-            {ticket.department_name} • {ticket.category_name}
+      render: ticket => {
+        const deptName = ticket.category?.department?.name || 'Department';
+        const catName = ticket.category?.name || 'General';
+        return (
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--color-slate-900)' }}>{ticket.title}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
+              {deptName} • {catName}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'priority',
@@ -76,18 +80,21 @@ export const MyTicketsPage: React.FC = () => {
     {
       key: 'status',
       header: 'Status',
-      width: '130px',
+      width: '140px',
       render: ticket => <StatusBadge status={ticket.status} />,
     },
     {
       key: 'assignee_name',
       header: 'Assigned Resolver',
       width: '170px',
-      render: ticket => (
-        <span style={{ fontSize: '0.85rem', color: ticket.assignee_name ? 'var(--color-slate-700)' : 'var(--color-slate-400)' }}>
-          {ticket.assignee_name || 'Awaiting assignment'}
-        </span>
-      ),
+      render: ticket => {
+        const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Awaiting assignment');
+        return (
+          <span style={{ fontSize: '0.85rem', color: ticket.assignee ? 'var(--color-slate-700)' : 'var(--color-slate-400)' }}>
+            {assigneeName}
+          </span>
+        );
+      },
     },
     {
       key: 'updated_at',
@@ -113,7 +120,7 @@ export const MyTicketsPage: React.FC = () => {
           size="sm"
           onClick={e => {
             e.stopPropagation();
-            navigate(`/tickets/${ticket.ticket_number}`);
+            navigate(`/tickets/${ticket.id}`);
           }}
         >
           Details
@@ -132,13 +139,23 @@ export const MyTicketsPage: React.FC = () => {
             All issues and requests submitted by you ({currentUser?.name}).
           </p>
         </div>
-        <Button
-          variant="primary"
-          leftIcon={<PlusCircle size={16} />}
-          onClick={() => navigate('/create-ticket')}
-        >
-          Create New Ticket
-        </Button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button
+            variant="secondary"
+            leftIcon={<RefreshCw size={15} />}
+            isLoading={isLoadingTickets}
+            onClick={() => fetchTickets()}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="primary"
+            leftIcon={<PlusCircle size={16} />}
+            onClick={() => navigate('/create-ticket')}
+          >
+            Create New Ticket
+          </Button>
+        </div>
       </div>
 
       {/* Filter / Search Bar */}
@@ -178,15 +195,18 @@ export const MyTicketsPage: React.FC = () => {
           {/* Status Filter */}
           <select
             className="form-select"
-            style={{ width: 140 }}
+            style={{ width: 160 }}
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
           >
             <option value="ALL">All Statuses</option>
             <option value="OPEN">Open</option>
+            <option value="ASSIGNED">Assigned</option>
             <option value="IN_PROGRESS">In Progress</option>
+            <option value="WAITING_FOR_USER">Waiting for User</option>
             <option value="RESOLVED">Resolved</option>
             <option value="CLOSED">Closed</option>
+            <option value="REOPENED">Reopened</option>
           </select>
 
           {/* Priority Filter */}
@@ -200,7 +220,7 @@ export const MyTicketsPage: React.FC = () => {
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
-            <option value="URGENT">Urgent</option>
+            <option value="CRITICAL">Critical</option>
           </select>
         </div>
 
@@ -277,7 +297,7 @@ export const MyTicketsPage: React.FC = () => {
           columns={columns}
           data={filteredTickets}
           keyExtractor={t => t.id}
-          onRowClick={t => navigate(`/tickets/${t.ticket_number}`)}
+          onRowClick={t => navigate(`/tickets/${t.id}`)}
         />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>

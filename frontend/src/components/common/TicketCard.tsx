@@ -17,7 +17,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick }) => {
     if (onClick) {
       onClick();
     } else {
-      navigate(`/tickets/${ticket.ticket_number}`);
+      navigate(`/tickets/${ticket.id}`);
     }
   };
 
@@ -34,6 +34,10 @@ export const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick }) => {
     }
   };
 
+  const departmentName = ticket.category?.department?.name || 'Department';
+  const categoryName = ticket.category?.name || 'General';
+  const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned');
+
   return (
     <div className="ticket-card" onClick={handleClick} role="button" tabIndex={0}>
       <div className="ticket-card-header">
@@ -41,7 +45,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick }) => {
           <span className="ticket-id">{ticket.ticket_number}</span>
           <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-400)' }}>•</span>
           <span style={{ fontSize: '0.825rem', fontWeight: 500, color: 'var(--color-slate-600)' }}>
-            {ticket.department_name}
+            {departmentName}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -52,26 +56,28 @@ export const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick }) => {
 
       <h4 className="ticket-card-title">{ticket.title}</h4>
 
-      <p style={{
-        fontSize: '0.85rem',
-        color: 'var(--color-slate-600)',
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-        lineHeight: 1.45,
-      }}>
+      <p
+        style={{
+          fontSize: '0.85rem',
+          color: 'var(--color-slate-600)',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          lineHeight: 1.45,
+        }}
+      >
         {ticket.description}
       </p>
 
       <div className="ticket-card-meta">
         <div className="ticket-meta-item">
           <Building size={14} />
-          <span>{ticket.category_name}</span>
+          <span>{categoryName}</span>
         </div>
         <div className="ticket-meta-item">
           <User size={14} />
-          <span>{ticket.assignee_name ? `Assigned: ${ticket.assignee_name}` : 'Unassigned'}</span>
+          <span>{assigneeName}</span>
         </div>
         <div className="ticket-meta-item">
           <Calendar size={14} />
