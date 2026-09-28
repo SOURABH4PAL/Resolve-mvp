@@ -73,6 +73,14 @@ def seed_database():
 
         db.commit()
 
+        # Safely migrate any existing legacy RESOLVER roles in DB to EMPLOYEE
+        try:
+            from sqlalchemy import text
+            db.execute(text("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'RESOLVER'"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         # 4. Users
         users_to_create = [
             {
@@ -85,10 +93,10 @@ def seed_database():
             },
             {
                 "employee_id": "EMP002",
-                "name": "IT Support Resolver",
+                "name": "IT Support Staff",
                 "email": "resolver@resolvehub.com",
                 "password": "Resolver123!",
-                "role": UserRole.RESOLVER,
+                "role": UserRole.EMPLOYEE,
                 "department_id": it_dept.id
             },
             {
@@ -115,8 +123,9 @@ def seed_database():
                 db.add(user)
                 print(f"Created demo user: {udata['email']} / {udata['password']} ({udata['role'].value})")
             else:
+                existing.role = udata["role"]
                 existing.password_hash = get_password_hash(udata["password"])
-                print(f"Updated demo user password: {udata['email']}")
+                print(f"Updated demo user password & role: {udata['email']}")
 
 
         db.commit()

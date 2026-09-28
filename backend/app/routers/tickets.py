@@ -54,10 +54,10 @@ def update_status(
 def resolve_ticket(
     ticket_id: str,
     resolve_in: TicketResolve,
-    current_user: User = Depends(require_role(UserRole.RESOLVER, UserRole.SUPER_ADMIN)),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Resolve ticket (Resolver/Admin)."""
+    """Resolve ticket (Assigned Employee/Admin)."""
     return ticket_service.resolve_ticket(db, ticket_id, resolve_in, current_user)
 
 

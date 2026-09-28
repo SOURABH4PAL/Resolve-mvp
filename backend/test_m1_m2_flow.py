@@ -84,26 +84,38 @@ def test_full_m1_m2_flow():
     attach_data = res_attach.json()
     print(f"Attachment uploaded successfully! File ID: {attach_data['id']}")
 
-    print("\n--- 9. Resolver Login & Status Update ---")
-    res_res_login = client.post("/api/auth/login", json={
+    print("\n--- 9. Assigned Employee Login & Status Update ---")
+    res_staff_login = client.post("/api/auth/login", json={
         "email": "resolver@resolvehub.com",
         "password": "Resolver123!"
     })
-    assert res_res_login.status_code == 200
-    resolver_token = res_res_login.json()["access_token"]
-    resolver_headers = {"Authorization": f"Bearer {resolver_token}"}
+    assert res_staff_login.status_code == 200
+    staff_data = res_staff_login.json()
+    assert staff_data["role"] == "EMPLOYEE"
+    staff_token = staff_data["access_token"]
+    staff_user_id = staff_data["user_id"]
+    staff_headers = {"Authorization": f"Bearer {staff_token}"}
 
-    # Update status to IN_PROGRESS
-    res_status = client.put(f"/api/tickets/{ticket_id}/status", json={"status": "IN_PROGRESS", "comment": "Investigating GPU drivers."}, headers=resolver_headers)
+    # Assign ticket to staff employee for resolution testing
+    from app.database import SessionLocal
+    from app.models.ticket import Ticket
+    db = SessionLocal()
+    db_ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    db_ticket.assigned_to = staff_user_id
+    db.commit()
+    db.close()
+
+    # Update status to IN_PROGRESS by assigned Employee
+    res_status = client.put(f"/api/tickets/{ticket_id}/status", json={"status": "IN_PROGRESS", "comment": "Investigating GPU drivers."}, headers=staff_headers)
     assert res_status.status_code == 200
     assert res_status.json()["status"] == "IN_PROGRESS"
-    print("Ticket status updated to IN_PROGRESS.")
+    print("Ticket status updated to IN_PROGRESS by assigned Employee.")
 
-    print("\n--- 10. Resolving Ticket ---")
-    res_resolve = client.put(f"/api/tickets/{ticket_id}/resolve", json={"resolution_notes": "Replaced display connector cable."}, headers=resolver_headers)
+    print("\n--- 10. Resolving Ticket by Assigned Employee ---")
+    res_resolve = client.put(f"/api/tickets/{ticket_id}/resolve", json={"resolution_notes": "Replaced display connector cable."}, headers=staff_headers)
     assert res_resolve.status_code == 200
     assert res_resolve.json()["status"] == "RESOLVED"
-    print("Ticket resolved successfully.")
+    print("Ticket resolved successfully by assigned Employee.")
 
     print("\n--- 11. Closing Ticket ---")
     res_close = client.put(f"/api/tickets/{ticket_id}/close", headers=headers)

@@ -38,30 +38,29 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
 
 def get_user_tickets(db: Session, current_user: User) -> List[Ticket]:
     """Retrieve tickets accessible to the user:
-    - EMPLOYEE: tickets created by self
-    - RESOLVER: tickets assigned to self or unassigned / created by self
+    - EMPLOYEE: tickets created by self or assigned to self
     - SUPER_ADMIN: all tickets
     """
     if current_user.role == UserRole.SUPER_ADMIN:
         return db.query(Ticket).order_by(Ticket.created_at.desc()).all()
-    elif current_user.role == UserRole.RESOLVER:
-        return db.query(Ticket).filter(
-            (Ticket.assigned_to == current_user.id) | 
-            (Ticket.created_by == current_user.id) | 
-            (Ticket.status == TicketStatus.OPEN)
-        ).order_by(Ticket.created_at.desc()).all()
-    else:
-        return db.query(Ticket).filter(Ticket.created_by == current_user.id).order_by(Ticket.created_at.desc()).all()
+    return db.query(Ticket).filter(
+        (Ticket.created_by == current_user.id) | 
+        (Ticket.assigned_to == current_user.id)
+    ).order_by(Ticket.created_at.desc()).all()
 
 
 def get_ticket_by_id(db: Session, ticket_id: str, current_user: User) -> Ticket:
-    """Fetch ticket details ensuring ownership or authorization."""
+    """Fetch ticket details ensuring ownership, assigned employee, or admin access."""
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     # Authorization check
-    if current_user.role == UserRole.EMPLOYEE and ticket.created_by != current_user.id:
+    if (
+        current_user.role != UserRole.SUPER_ADMIN and 
+        ticket.created_by != current_user.id and 
+        ticket.assigned_to != current_user.id
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this ticket")
 
     return ticket
@@ -71,11 +70,13 @@ def update_ticket_status(db: Session, ticket_id: str, update_in: TicketStatusUpd
     """Update status of a ticket."""
     ticket = get_ticket_by_id(db, ticket_id, current_user)
     
-    if current_user.role == UserRole.EMPLOYEE and update_in.status not in [TicketStatus.CLOSED, TicketStatus.REOPENED]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Employees can only close or reopen their tickets"
-        )
+    if current_user.role != UserRole.SUPER_ADMIN:
+        is_assigned = (ticket.assigned_to == current_user.id)
+        if not is_assigned and update_in.status not in [TicketStatus.CLOSED, TicketStatus.REOPENED]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Employees can only close or reopen their tickets unless assigned to them"
+            )
 
     ticket.status = update_in.status
     if update_in.status == TicketStatus.RESOLVED:
@@ -102,8 +103,11 @@ def resolve_ticket(db: Session, ticket_id: str, resolve_in: TicketResolve, curre
     """Mark ticket as RESOLVED."""
     ticket = get_ticket_by_id(db, ticket_id, current_user)
     
-    if current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only resolvers/admins can resolve tickets")
+    if current_user.role != UserRole.SUPER_ADMIN and ticket.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned employee or admin can resolve this ticket"
+        )
 
     ticket.status = TicketStatus.RESOLVED
     ticket.resolved_at = datetime.utcnow()
@@ -146,8 +150,11 @@ def add_comment(db: Session, ticket_id: str, comment_in: TicketCommentCreate, cu
     """Add a comment or internal note to a ticket."""
     ticket = get_ticket_by_id(db, ticket_id, current_user)
 
-    if comment_in.is_internal and current_user.role == UserRole.EMPLOYEE:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employees cannot create internal notes")
+    if comment_in.is_internal and current_user.role != UserRole.SUPER_ADMIN and ticket.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only assigned employees or admins can create internal notes"
+        )
 
     comment = TicketComment(
         ticket_id=ticket.id,
@@ -162,11 +169,11 @@ def add_comment(db: Session, ticket_id: str, comment_in: TicketCommentCreate, cu
 
 
 def get_ticket_comments(db: Session, ticket_id: str, current_user: User) -> List[TicketComment]:
-    """Retrieve comments for a ticket. Hide internal notes for EMPLOYEE role."""
+    """Retrieve comments for a ticket. Hide internal notes for non-assigned employees."""
     ticket = get_ticket_by_id(db, ticket_id, current_user)
 
     query = db.query(TicketComment).filter(TicketComment.ticket_id == ticket.id)
-    if current_user.role == UserRole.EMPLOYEE:
+    if current_user.role != UserRole.SUPER_ADMIN and ticket.assigned_to != current_user.id:
         query = query.filter(TicketComment.is_internal == False)
 
     return query.order_by(TicketComment.created_at.asc()).all()
