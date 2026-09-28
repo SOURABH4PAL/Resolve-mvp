@@ -1,4 +1,4 @@
-export type UserRole = 'EMPLOYEE' | 'RESOLVER' | 'SUPER_ADMIN';
+export type UserRole = 'EMPLOYEE' | 'SUPER_ADMIN';
 
 export interface User {
   id: string;
@@ -11,6 +11,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   department?: Department | null;
+  responsibilities?: string[]; // e.g. ["Hardware", "Software"]
 }
 
 export interface Department {
@@ -28,6 +29,8 @@ export interface Category {
   name: string;
   description?: string | null;
   is_active: boolean;
+  responsible_employee_id?: string | null;
+  responsible_employee?: User | null;
   created_at: string;
   updated_at: string;
   department?: Department | null;
@@ -85,7 +88,7 @@ export interface Ticket {
   created_by: string;
   category_id: string;
   subcategory_id?: string | null;
-  assigned_to?: string | null;
+  assigned_to?: string | null; // ID of the Responsible Employee
   priority: TicketPriority;
   status: TicketStatus;
   resolved_at?: string | null;
@@ -93,7 +96,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   creator?: User | null;
-  assignee?: User | null;
+  assignee?: User | null; // The Responsible Employee
   category?: Category | null;
   subcategory?: Subcategory | null;
   comments?: TicketComment[];
@@ -117,4 +120,63 @@ export interface NotificationItem {
   created_at: string;
   ticket_id?: string;
   ticket_number?: string;
+}
+
+/**
+ * Responsibility & Routing Configuration Model
+ * Super Admin configures: Department -> Category -> Responsible Employee
+ */
+export interface CategoryResponsibility {
+  id: string;
+  department_id: string;
+  category_id: string;
+  category_name: string;
+  department_name: string;
+  responsible_employee_id: string;
+  responsible_employee_name: string;
+  responsible_employee_email: string;
+  backup_employee_id?: string | null;
+  backup_employee_name?: string | null;
+  updated_at: string;
+}
+
+export interface EmployeeWorkloadItem {
+  employee_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  department: string;
+  responsibilities: string[]; // Category names they are responsible for
+  assignedTicketsCount: number;
+  resolvedTicketsCount: number;
+}
+
+export interface EscalationItem {
+  id: string;
+  ticket_number: string;
+  title: string;
+  priority: TicketPriority;
+  department: string;
+  responsible_employee_name: string;
+  hours_elapsed: number;
+  sla_limit_hours: number;
+  status: TicketStatus;
+}
+
+export interface SlaRule {
+  priority: TicketPriority;
+  firstResponseHours: number;
+  resolutionHours: number;
+  escalateTo: string;
+  description: string;
+}
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  department_name: string;
+  category_name: string;
+  views: number;
+  helpful_count: number;
 }

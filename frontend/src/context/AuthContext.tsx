@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, AuthResponse } from '../types';
+import { User, AuthResponse, UserRole } from '../types';
 import { api, TOKEN_STORAGE_KEY } from '../api/client';
 
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -16,6 +16,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const normalizeUser = (user: User): User => {
+    // Contract safeguard: ResolveHub MVP only has EMPLOYEE and SUPER_ADMIN
+    const normalizedRole: UserRole = user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'EMPLOYEE';
+    return {
+      ...user,
+      role: normalizedRole,
+    };
+  };
 
   const fetchCurrentUser = useCallback(async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -27,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const user = await api.get<User>('/users/me');
-      setCurrentUser(user);
+      setCurrentUser(normalizeUser(user));
     } catch {
       // Token expired or invalid
       localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -50,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [fetchCurrentUser]);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<User | null> => {
     setIsLoading(true);
     try {
       const authData = await api.post<AuthResponse>('/auth/login', {
@@ -61,25 +70,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (authData.access_token) {
         localStorage.setItem(TOKEN_STORAGE_KEY, authData.access_token);
         // Retrieve full profile from /api/users/me
+        let loggedInUser: User;
         try {
           const user = await api.get<User>('/users/me');
-          setCurrentUser(user);
+          loggedInUser = normalizeUser(user);
         } catch {
-          // Fallback user object from token response if /users/me has transient delay
-          setCurrentUser({
+          // Fallback user object from token response
+          const normalizedRole: UserRole = authData.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'EMPLOYEE';
+          loggedInUser = {
             id: authData.user_id,
             employee_id: authData.user_id,
             name: authData.name,
             email: email.trim(),
-            role: authData.role,
+            role: normalizedRole,
             is_active: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
+          };
         }
-        return true;
+        setCurrentUser(loggedInUser);
+        return loggedInUser;
       }
-      return false;
+      return null;
     } catch (error) {
       throw error;
     } finally {

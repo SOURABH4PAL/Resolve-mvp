@@ -11,9 +11,10 @@ export interface Column<T> {
 export interface TableProps<T> {
   columns: Column<T>[];
   data: T[];
-  keyExtractor: (item: T) => string;
+  keyExtractor?: (item: T) => string;
   onRowClick?: (item: T) => void;
   emptyMessage?: string;
+  isLoading?: boolean;
 }
 
 export function Table<T>({
@@ -22,6 +23,7 @@ export function Table<T>({
   keyExtractor,
   onRowClick,
   emptyMessage = 'No records found',
+  isLoading = false,
 }: TableProps<T>): React.ReactElement {
   return (
     <div className="table-container">
@@ -42,35 +44,50 @@ export function Table<T>({
           </tr>
         </thead>
         <tbody>
-          {data.length === 0 ? (
+          {isLoading ? (
             <tr>
-              <td colSpan={columns.length} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--color-slate-400)' }}>
+              <td
+                colSpan={columns.length}
+                style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--color-slate-400)' }}
+              >
+                Loading records...
+              </td>
+            </tr>
+          ) : data.length === 0 ? (
+            <tr>
+              <td
+                colSpan={columns.length}
+                style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--color-slate-400)' }}
+              >
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            data.map(item => (
-              <tr
-                key={keyExtractor(item)}
-                onClick={() => onRowClick && onRowClick(item)}
-                style={{ cursor: onRowClick ? 'pointer' : 'default' }}
-              >
-                {columns.map(col => (
-                  <td
-                    key={col.key}
-                    style={{
-                      textAlign: col.align || 'left',
-                    }}
-                  >
-                    {col.render
-                      ? col.render(item)
-                      : (item as Record<string, unknown>)[col.key] !== undefined
-                      ? String((item as Record<string, unknown>)[col.key])
-                      : ''}
-                  </td>
-                ))}
-              </tr>
-            ))
+            data.map((item, index) => {
+              const rowKey = keyExtractor
+                ? keyExtractor(item)
+                : (item as any)?.id || (item as any)?.ticket_number || String(index);
+
+              return (
+                <tr
+                  key={rowKey}
+                  onClick={() => onRowClick && onRowClick(item)}
+                  style={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                >
+                  {columns.map(col => (
+                    <td
+                      key={col.key}
+                      style={{
+                        textAlign: col.align || 'left',
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      {col.render ? col.render(item) : (item as any)[col.key]}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

@@ -97,14 +97,18 @@ export const TicketDetailsPage: React.FC = () => {
         <p className="empty-state-text">
           {error || `No ticket matching "${id}" could be located on the server.`}
         </p>
-        <Button variant="primary" onClick={() => navigate('/dashboard')}>
+        <Button variant="primary" onClick={() => navigate('/')}>
           Back to Dashboard
         </Button>
       </div>
     );
   }
 
-  const isStaff = currentUser?.role === 'RESOLVER' || currentUser?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+  const isAssigned = currentUser?.id === ticket.assigned_to || currentUser?.employee_id === ticket.assigned_to;
+  const isCreator = currentUser?.id === ticket.created_by;
+  const canManageTicket = isSuperAdmin || isAssigned;
+  const isStaff = canManageTicket;
 
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -455,7 +459,7 @@ export const TicketDetailsPage: React.FC = () => {
                   </div>
                 ) : (
                   comments.map(c => {
-                    const isStaffComment = c.user?.role === 'RESOLVER' || c.user?.role === 'SUPER_ADMIN';
+                    const isStaffComment = c.user?.role === 'SUPER_ADMIN' || c.user_id === ticket.assigned_to;
                     return (
                       <div
                         key={c.id}
@@ -604,7 +608,7 @@ export const TicketDetailsPage: React.FC = () => {
 
               <div>
                 <span style={{ color: 'var(--color-slate-400)', display: 'block', marginBottom: 2 }}>
-                  Assigned Resolver
+                  Assigned To (Responsible Employee)
                 </span>
                 <div style={{ fontWeight: 600, color: ticket.assignee ? 'var(--color-slate-900)' : 'var(--color-slate-400)' }}>
                   {assigneeName}

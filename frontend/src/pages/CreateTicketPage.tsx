@@ -164,7 +164,7 @@ export const CreateTicketPage: React.FC = () => {
                 onChange={e => setTitle(e.target.value)}
                 required
                 error={errors.title}
-                hint="Be specific so the designated resolver can quickly understand the problem."
+                hint="Be specific so the responsible team can quickly understand and resolve the problem."
               />
 
               {/* Department & Category Selects */}

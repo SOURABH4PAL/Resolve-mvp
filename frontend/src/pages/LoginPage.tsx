@@ -4,21 +4,33 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
 import { Layers, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { UserRole } from '../types';
 
-const DEMO_ACCOUNTS = [
+interface DemoAccount {
+  label: string;
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  responsibility?: string;
+}
+
+const DEMO_ACCOUNTS: DemoAccount[] = [
   {
-    label: 'Employee',
+    label: 'Employee (Support User)',
     name: 'Jane Doe',
     email: 'employee@resolvehub.com',
     password: 'Employee123!',
     role: 'EMPLOYEE',
+    responsibility: 'General Employee (Creates Tickets)',
   },
   {
-    label: 'IT Resolver',
-    name: 'IT Support Resolver',
+    label: 'Employee (Responsible for IT)',
+    name: 'IT Support Lead',
     email: 'resolver@resolvehub.com',
     password: 'Resolver123!',
-    role: 'RESOLVER',
+    role: 'EMPLOYEE',
+    responsibility: 'Responsible for IT Support Categories',
   },
   {
     label: 'Super Admin',
@@ -26,6 +38,7 @@ const DEMO_ACCOUNTS = [
     email: 'admin@resolvehub.com',
     password: 'Admin123!',
     role: 'SUPER_ADMIN',
+    responsibility: 'Complete System & Org Management',
   },
 ];
 
@@ -49,9 +62,13 @@ export const LoginPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const success = await login(email.trim(), password);
-      if (success) {
-        navigate('/dashboard');
+      const user = await login(email.trim(), password);
+      if (user) {
+        if (user.role === 'SUPER_ADMIN') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/employee/dashboard');
+        }
       } else {
         setError('Login failed. Please verify your credentials.');
       }
@@ -63,7 +80,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSelectDemoAccount = (acc: typeof DEMO_ACCOUNTS[0]) => {
+  const handleSelectDemoAccount = (acc: DemoAccount) => {
     setEmail(acc.email);
     setPassword(acc.password);
     setError('');
@@ -73,10 +90,10 @@ export const LoginPage: React.FC = () => {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: 'var(--color-slate-100)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#f8fafc',
         padding: '24px 16px',
       }}
     >
@@ -85,120 +102,137 @@ export const LoginPage: React.FC = () => {
           width: '100%',
           maxWidth: 440,
           backgroundColor: '#ffffff',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-slate-200)',
-          boxShadow: 'var(--shadow-lg)',
-          overflow: 'hidden',
+          borderRadius: 16,
+          boxShadow: '0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04)',
+          border: '1px solid #e2e8f0',
+          padding: '40px 32px',
         }}
       >
         {/* Brand Header */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              backgroundColor: 'var(--color-primary-600)',
+              borderRadius: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              marginBottom: 16,
+              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.35)',
+            }}
+          >
+            <Layers size={28} />
+          </div>
+          <h1
+            style={{
+              fontSize: '1.6rem',
+              fontWeight: 700,
+              color: 'var(--color-slate-900)',
+              letterSpacing: '-0.025em',
+            }}
+          >
+            Sign In to ResolveHub
+          </h1>
+          <p
+            style={{
+              fontSize: '0.85rem',
+              color: 'var(--color-slate-500)',
+              marginTop: 6,
+            }}
+          >
+            Unified internal support and issue resolution platform
+          </p>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 14px',
+              backgroundColor: 'var(--color-danger-bg)',
+              color: 'var(--color-danger-text)',
+              border: '1px solid var(--color-danger-border)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: 20,
+            }}
+          >
+            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Input
+            label="Work Email"
+            type="email"
+            placeholder="you@resolvehub.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            leftIcon={<Mail size={16} />}
+            required
+            autoComplete="email"
+          />
+
+          <Input
+            label="Password"
+            type="password"
+            placeholder="••••••••••••"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            leftIcon={<Lock size={16} />}
+            required
+            autoComplete="current-password"
+          />
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            isLoading={loading}
+            rightIcon={<ArrowRight size={16} />}
+            style={{ width: '100%', marginTop: 8 }}
+          >
+            Sign In
+          </Button>
+        </form>
+
+        {/* Seeded Demo Credentials Helper */}
         <div
           style={{
-            padding: '36px 32px 24px',
-            textAlign: 'center',
-            borderBottom: '1px solid var(--color-slate-100)',
+            marginTop: 28,
+            paddingTop: 20,
+            borderTop: '1px solid var(--color-slate-100)',
           }}
         >
           <div
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 'var(--radius-lg)',
-              background: 'linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-800) 100%)',
-              color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px',
-              boxShadow: '0 4px 8px rgba(79, 70, 229, 0.25)',
+              gap: 6,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'var(--color-slate-400)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 12,
             }}
           >
-            <Layers size={24} />
+            <ShieldCheck size={14} />
+            <span>Seeded Demo Credentials</span>
           </div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--color-slate-900)' }}>
-            Sign In to ResolveHub
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-slate-500)', marginTop: 4 }}>
-            Connected to FastAPI Backend (`POST /api/auth/login`)
-          </p>
-        </div>
 
-        {/* Login Form */}
-        <div style={{ padding: '28px 32px' }}>
-          <form onSubmit={handleSubmit}>
-            <Input
-              label="Work Email"
-              type="email"
-              placeholder="name@resolvehub.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              leftIcon={<Mail size={16} />}
-            />
-
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              leftIcon={<Lock size={16} />}
-            />
-
-            {error && (
-              <div
-                style={{
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
-                  color: '#991b1b',
-                  fontSize: '0.825rem',
-                  marginBottom: 18,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <AlertCircle size={16} style={{ flexShrink: 0 }} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={loading}
-              rightIcon={<ArrowRight size={16} />}
-              style={{ width: '100%', marginTop: 8 }}
-            >
-              Sign In
-            </Button>
-          </form>
-
-          {/* Seeded Backend Credentials */}
-          <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--color-slate-100)' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginBottom: 12,
-                fontSize: '0.775rem',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: 'var(--color-slate-500)',
-              }}
-            >
-              <ShieldCheck size={14} />
-              <span>Use Seeded Demo Credentials:</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {DEMO_ACCOUNTS.map(acc => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {DEMO_ACCOUNTS.map(acc => {
+              const isSelected = email === acc.email;
+              return (
                 <button
                   key={acc.email}
                   type="button"
@@ -207,22 +241,37 @@ export const LoginPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: email === acc.email ? '1px solid var(--color-primary-500)' : '1px solid var(--color-slate-200)',
-                    backgroundColor: email === acc.email ? 'var(--color-primary-50)' : 'var(--color-slate-50)',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: '1px solid',
+                    borderColor: isSelected ? 'var(--color-primary-500)' : 'var(--color-slate-200)',
+                    backgroundColor: isSelected ? 'var(--color-primary-50)' : '#ffffff',
+                    cursor: 'pointer',
                     textAlign: 'left',
                     transition: 'all 0.15s ease',
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--color-slate-800)' }}>
-                      {acc.label} ({acc.name})
+                    <div
+                      style={{
+                        fontSize: '0.825rem',
+                        fontWeight: 600,
+                        color: isSelected ? 'var(--color-primary-800)' : 'var(--color-slate-800)',
+                      }}
+                    >
+                      {acc.label}
                     </div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--color-slate-500)' }}>
+                    <div
+                      style={{
+                        fontSize: '0.725rem',
+                        color: 'var(--color-slate-500)',
+                        marginTop: 1,
+                      }}
+                    >
                       {acc.email}
                     </div>
                   </div>
+
                   <span
                     style={{
                       fontSize: '0.7rem',
@@ -232,22 +281,18 @@ export const LoginPage: React.FC = () => {
                       backgroundColor:
                         acc.role === 'SUPER_ADMIN'
                           ? '#fee2e2'
-                          : acc.role === 'RESOLVER'
-                          ? '#fef3c7'
                           : '#e0e7ff',
                       color:
                         acc.role === 'SUPER_ADMIN'
                           ? '#991b1b'
-                          : acc.role === 'RESOLVER'
-                          ? '#92400e'
                           : '#3730a3',
                     }}
                   >
                     {acc.role}
                   </span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       </div>

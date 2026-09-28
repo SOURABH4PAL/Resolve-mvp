@@ -85,7 +85,7 @@ export const MyTicketsPage: React.FC = () => {
     },
     {
       key: 'assignee_name',
-      header: 'Assigned Resolver',
+      header: 'Assigned To',
       width: '170px',
       render: ticket => {
         const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Awaiting assignment');
