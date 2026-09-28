@@ -4,39 +4,34 @@ A clean, modern React + TypeScript frontend foundation for **ResolveHub**, an in
 
 ## 🚀 Key Features Built
 
-1. **Application Shell & Layout**:
-   - Fixed responsive Sidebar with real-time badges (My Tickets, Assigned Tickets, Notifications).
-   - Sticky Navbar with unified Persona/Role switcher, notifications indicator, and profile quick access.
-   - Clean professional internal-business UI following the ResolveHub MVP Architecture specification.
+1. **Dual Role Experience & Portals**:
+   - **Super Admin Management Portal** (`/admin/*`):
+     - **Admin Dashboard** (`/admin/dashboard`): Real-time metrics, workload distribution across employees, SLA health, escalation tracker, and system-wide KPI summary.
+     - **Ticket Management** (`/admin/tickets`): Complete company-wide ticket ledger, filterable by department, category, priority, status, and responsible employee.
+     - **Employee Directory & Responsibilities** (`/admin/employees`): Employee list with designated category responsibilities and active workload counters.
+     - **Department Management** (`/admin/departments`): Department configuration with contact emails and status.
+     - **Category & Subcategory Management** (`/admin/categories`): Categorization tree linked to responsible support staff.
+     - **Responsibility & Routing** (`/admin/routing`): Configure Department → Category → Responsible Employee assignments and backup personnel.
+     - **SLA & Escalation Policies** (`/admin/sla`): Response and resolution threshold configuration per priority.
+     - **Activity & Audit Trail** (`/admin/activity`): System-wide security, lifecycle, and access log.
+     - **FAQ / Knowledge Base** (`/admin/faq`): Internal resolutions repository.
+     - **Reports & Analytics** (`/admin/reports`): Resolution trends, department efficiency, and volume stats.
+     - **Settings & Profile** (`/admin/settings`): Admin profile and company-wide notification rules.
+   - **Employee Support Portal** (`/employee/*`):
+     - **Dashboard** (`/employee/dashboard`): Personalized dashboard showing submitted tickets, tickets assigned to me, and announcements.
+     - **Create Ticket** (`/employee/create-ticket`): Intelligent ticket creation with category selection and automatic responsible employee assignment.
+     - **My Tickets** (`/employee/my-tickets`): Personal tickets queue with real-time status and priority badges.
+     - **Assigned To Me** (`/employee/assigned`): Support queue for employees designated to handle department categories, with quick lifecycle actions (Start, Resolve, Reopen) and reassignment.
+     - **Notifications** (`/employee/notifications`): Lifecycle updates and comment alerts.
+     - **Profile** (`/employee/profile`): Employee profile and quick role testing.
 
-2. **Persona / Role Switching**:
-   - Seamless demo switcher to test the unified interface from all perspectives:
-     - **Alex Morgan** (`EMPLOYEE` - Finance)
-     - **Sarah Jenkins** (`RESOLVER` - IT Support)
-     - **Michael Chen** (`RESOLVER` - Human Resources)
-     - **Sourabh Sharma** (`SUPER_ADMIN` - Administration)
+2. **Role & Demo Experience**:
+   - **Interactive Live Role Switcher**: Switch between Super Admin and Employee view with one click directly in the top Navbar.
+   - **Standalone Demo Resilience**: Works seamlessly offline without requiring a live backend, and automatically uses real FastAPI endpoints when the backend is active.
 
-3. **All 10 Required Pages & Views**:
-   - **Login Page** (`/login`): Clean credential login with 1-click demo role sign-in buttons.
-   - **Dashboard Page** (`/dashboard`): Unified Employee + Resolver dashboard with KPI stats, critical urgent issue alerts, lifecycle status filters, and recent ticket activity.
-   - **Create Ticket Page** (`/create-ticket`): Ticket creation with auto-derived department from category (per Architecture design to prevent relational anomalies), priority selector, and OneDrive attachment simulation.
-   - **My Tickets Page** (`/my-tickets`): Creator queue with live text search, status filters, priority filters, and table/card view switcher.
-   - **Assigned To Me Page** (`/assigned-to-me`): Dedicated resolver worklist with quick status transitions (Start, Resolve), ticket transfer modal (BRD 6.4), and queue metrics.
-   - **Ticket Details Page** (`/tickets/:id`): Complete ticket lifecycle management (Open → In Progress → Resolved → Closed), reopening workflow, user escalation/highlighting (BRD 6.6), internal notes toggle for staff, attachment management, and comment timeline.
-   - **Notifications Page** (`/notifications`): Unread/All notification tracking, mark as read, and direct links to tickets.
-   - **Profile Page** (`/profile`): Employee profile details, activity metrics, and interactive persona testing.
-
-4. **Reusable Component Library**:
-   - `Navbar`
-   - `Sidebar`
-   - `Button` (primary, secondary, danger, ghost variants with loading states & icons)
-   - `Input` (floating icon, error, hint, required state)
-   - `Select` (custom formatted options, placeholder)
-   - `Modal` (accessible dialog with backdrop & Escape key dismissal)
-   - `StatusBadge` (`OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`)
-   - `PriorityBadge` (`LOW`, `MEDIUM`, `HIGH`, `URGENT`)
-   - `TicketCard` (metadata chips, category info, attachment & comment counters)
-   - `Table` (generic typed column renderer with interactive row click)
+3. **Reusable Component Library**:
+   - `Navbar`, `Sidebar`, `AppLayout`
+   - `Button`, `Input`, `Select`, `Modal`, `StatusBadge`, `PriorityBadge`, `TicketCard`, `Table`
 
 ## 🛠️ Development & Running
 
