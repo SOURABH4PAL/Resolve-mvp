@@ -4,7 +4,7 @@ import { Bell, LogOut, User as UserIcon, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, switchUserRole } = useAuth();
   const navigate = useNavigate();
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
@@ -44,6 +44,50 @@ export const Navbar: React.FC = () => {
       </div>
 
       <div className="navbar-right">
+        {/* Quick Role Switcher for Live Demo */}
+        {switchUserRole && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: isSuperAdmin ? '#fef2f2' : '#eef2ff',
+              border: `1px solid ${isSuperAdmin ? '#fecaca' : '#c7d2fe'}`,
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.775rem',
+            }}
+          >
+            <Shield
+              size={13}
+              style={{
+                color: isSuperAdmin ? '#dc2626' : 'var(--color-primary-600)',
+              }}
+            />
+            <span style={{ fontWeight: 600, color: 'var(--color-slate-600)' }}>Role:</span>
+            <select
+              value={isSuperAdmin ? 'SUPER_ADMIN' : 'EMPLOYEE'}
+              onChange={e => {
+                const target = e.target.value as 'SUPER_ADMIN' | 'EMPLOYEE';
+                switchUserRole(target);
+                navigate(target === 'SUPER_ADMIN' ? '/admin/dashboard' : '/employee/dashboard');
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                fontWeight: 700,
+                fontSize: '0.775rem',
+                color: isSuperAdmin ? '#991b1b' : '#3730a3',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="SUPER_ADMIN">Super Admin (Management)</option>
+              <option value="EMPLOYEE">Employee (Support Portal)</option>
+            </select>
+          </div>
+        )}
+
         {/* Current User Role Badge */}
         {currentUser && (
           <div
@@ -57,26 +101,8 @@ export const Navbar: React.FC = () => {
               fontSize: '0.8rem',
             }}
           >
-            <Shield
-              size={14}
-              style={{
-                color: isSuperAdmin ? '#dc2626' : 'var(--color-primary-600)',
-              }}
-            />
             <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>
               {currentUser.name}
-            </span>
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-full)',
-                backgroundColor: isSuperAdmin ? '#fee2e2' : '#e0e7ff',
-                color: isSuperAdmin ? '#991b1b' : '#3730a3',
-              }}
-            >
-              {isSuperAdmin ? 'Super Admin' : 'Employee'}
             </span>
           </div>
         )}

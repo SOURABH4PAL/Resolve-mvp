@@ -26,9 +26,9 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     label: 'Employee (Responsible for IT)',
-    name: 'IT Support Lead',
-    email: 'resolver@resolvehub.com',
-    password: 'Resolver123!',
+    name: 'Amit Patel (IT Lead)',
+    email: 'amit.patel@resolvehub.com',
+    password: 'Password123!',
     role: 'EMPLOYEE',
     responsibility: 'Responsible for IT Support Categories',
   },
