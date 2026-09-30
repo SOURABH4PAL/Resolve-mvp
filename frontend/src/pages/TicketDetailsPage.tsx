@@ -6,6 +6,7 @@ import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Ticket, TicketStatus, TicketComment, TicketAttachment } from '../types';
+import { ApiError } from '../api/client';
 import {
   ArrowLeft,
   Building,
@@ -22,6 +23,7 @@ import {
   Download,
   UploadCloud,
   AlertCircle,
+  ShieldAlert,
   RefreshCw,
 } from 'lucide-react';
 
@@ -34,10 +36,13 @@ export const TicketDetailsPage: React.FC = () => {
     updateTicketStatus,
     resolveTicket,
     closeTicket,
+    assignTicket,
+    employees,
     getComments,
     addComment,
     getAttachments,
     uploadAttachment,
+    downloadAttachment,
   } = useTickets();
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -45,6 +50,7 @@ export const TicketDetailsPage: React.FC = () => {
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [is403, setIs403] = useState<boolean>(false);
 
   // Form states
   const [commentText, setCommentText] = useState('');
@@ -52,14 +58,22 @@ export const TicketDetailsPage: React.FC = () => {
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [downloadingAttId, setDownloadingAttId] = useState<string | null>(null);
+
+  // Assignment states for Super Admin
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
+  const [isAssigning, setIsAssigning] = useState<boolean>(false);
+  const [assignMessage, setAssignMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadTicketData = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
     setError(null);
+    setIs403(false);
     try {
       const ticketData = await getTicketById(id);
       setTicket(ticketData);
+      setSelectedAssigneeId(ticketData.assigned_to || '');
 
       // Load comments & attachments in parallel
       const [commentsData, attachmentsData] = await Promise.all([
@@ -69,8 +83,19 @@ export const TicketDetailsPage: React.FC = () => {
       setComments(commentsData || []);
       setAttachments(attachmentsData || []);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load ticket details';
-      setError(msg);
+      if (err instanceof ApiError) {
+        if (err.status === 403) {
+          setIs403(true);
+          setError('Access Denied: You do not have permission to view or manage this ticket.');
+        } else if (err.status === 404) {
+          setError(`Ticket "${id}" was not found on the server.`);
+        } else {
+          setError(err.message || 'Failed to load ticket details');
+        }
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to load ticket details';
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -92,8 +117,12 @@ export const TicketDetailsPage: React.FC = () => {
   if (error || !ticket) {
     return (
       <div className="empty-state">
-        <AlertCircle size={32} style={{ color: '#ef4444', margin: '0 auto 12px' }} />
-        <h3 className="empty-state-title">Ticket Not Found</h3>
+        {is403 ? (
+          <ShieldAlert size={36} style={{ color: '#dc2626', margin: '0 auto 12px' }} />
+        ) : (
+          <AlertCircle size={36} style={{ color: '#ef4444', margin: '0 auto 12px' }} />
+        )}
+        <h3 className="empty-state-title">{is403 ? 'Access Forbidden' : 'Ticket Not Found'}</h3>
         <p className="empty-state-text">
           {error || `No ticket matching "${id}" could be located on the server.`}
         </p>
@@ -120,9 +149,9 @@ export const TicketDetailsPage: React.FC = () => {
       setComments(prev => [...prev, newComment]);
       setCommentText('');
       setIsInternalNote(false);
-    } catch (err) {
-      console.error('Failed to post comment:', err);
-      alert('Failed to post comment to server.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to post comment to server.';
+      alert(msg);
     } finally {
       setIsPostingComment(false);
     }
@@ -143,9 +172,9 @@ export const TicketDetailsPage: React.FC = () => {
       // Reload comments to reflect system status comment created by backend
       const freshComments = await getComments(ticket.id);
       setComments(freshComments || []);
-    } catch (err) {
-      console.error('Failed to update status:', err);
-      alert('Failed to update status on server.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update status on server.';
+      alert(msg);
     } finally {
       setStatusLoading(false);
     }
@@ -158,12 +187,43 @@ export const TicketDetailsPage: React.FC = () => {
       try {
         const newAtt = await uploadAttachment(ticket.id, file);
         setAttachments(prev => [...prev, newAtt]);
-      } catch (err) {
-        console.error('Failed to upload file:', err);
-        alert('File upload failed. Ensure size is within 10MB limit.');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'File upload failed. Ensure size is within 10MB limit.';
+        alert(msg);
       } finally {
         setIsUploading(false);
       }
+    }
+  };
+
+  const handleDownloadAttachment = async (attachmentId: string, filename: string) => {
+    setDownloadingAttId(attachmentId);
+    try {
+      await downloadAttachment(attachmentId, filename);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to download attachment.';
+      alert(msg);
+    } finally {
+      setDownloadingAttId(null);
+    }
+  };
+
+  const handleAssignTicket = async () => {
+    if (!selectedAssigneeId) return;
+    setIsAssigning(true);
+    setAssignMessage(null);
+    try {
+      const targetEmp = employees.find(e => e.id === selectedAssigneeId || e.employee_id === selectedAssigneeId);
+      await assignTicket(ticket.id, selectedAssigneeId, targetEmp?.name);
+      setAssignMessage({ type: 'success', text: `Assigned to ${targetEmp?.name || selectedAssigneeId}` });
+      // Reload ticket data to reflect new assignment
+      const updated = await getTicketById(ticket.id);
+      setTicket(updated);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to assign ticket';
+      setAssignMessage({ type: 'error', text: msg });
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -184,6 +244,7 @@ export const TicketDetailsPage: React.FC = () => {
 
   const departmentName = ticket.category?.department?.name || 'Department';
   const categoryName = ticket.category?.name || 'General';
+  const subcategoryName = ticket.subcategory?.name;
   const creatorName = ticket.creator?.name || 'Employee';
   const creatorEmail = ticket.creator?.email || '—';
   const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned');
@@ -202,6 +263,9 @@ export const TicketDetailsPage: React.FC = () => {
             fontSize: '0.85rem',
             fontWeight: 500,
             cursor: 'pointer',
+            background: 'none',
+            border: 'none',
+            padding: 0,
           }}
         >
           <ArrowLeft size={16} />
@@ -226,7 +290,7 @@ export const TicketDetailsPage: React.FC = () => {
         <div className="card-body">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                 <span
                   style={{
                     fontFamily: 'monospace',
@@ -245,6 +309,14 @@ export const TicketDetailsPage: React.FC = () => {
                 <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-500)' }}>
                   {categoryName}
                 </span>
+                {subcategoryName && (
+                  <>
+                    <span style={{ color: 'var(--color-slate-300)' }}>•</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--color-primary-600)', fontWeight: 500 }}>
+                      {subcategoryName}
+                    </span>
+                  </>
+                )}
               </div>
               <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--color-slate-900)', lineHeight: 1.35 }}>
                 {ticket.title}
@@ -276,7 +348,7 @@ export const TicketDetailsPage: React.FC = () => {
                 Lifecycle:
               </span>
 
-              {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED') && (
+              {canManageTicket && (ticket.status === 'OPEN' || ticket.status === 'ASSIGNED') && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -288,7 +360,7 @@ export const TicketDetailsPage: React.FC = () => {
                 </Button>
               )}
 
-              {ticket.status === 'IN_PROGRESS' && (
+              {canManageTicket && (ticket.status === 'IN_PROGRESS' || ticket.status === 'WAITING_FOR_USER') && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -335,7 +407,7 @@ export const TicketDetailsPage: React.FC = () => {
                 </Button>
               )}
 
-              {ticket.status === 'REOPENED' && (
+              {canManageTicket && ticket.status === 'REOPENED' && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -425,15 +497,15 @@ export const TicketDetailsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <a
-                        href={`/api/attachments/${att.id}/download`}
-                        download={att.file_name}
-                        className="btn btn-ghost btn-sm"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        isLoading={downloadingAttId === att.id}
+                        leftIcon={<Download size={14} />}
+                        onClick={() => handleDownloadAttachment(att.id, att.file_name)}
                       >
-                        <Download size={14} />
                         Download
-                      </a>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -593,6 +665,17 @@ export const TicketDetailsPage: React.FC = () => {
                 </div>
               </div>
 
+              {subcategoryName && (
+                <div>
+                  <span style={{ color: 'var(--color-slate-400)', display: 'block', marginBottom: 2 }}>
+                    Subcategory
+                  </span>
+                  <div style={{ fontWeight: 600, color: 'var(--color-primary-700)' }}>
+                    {subcategoryName}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <span style={{ color: 'var(--color-slate-400)', display: 'block', marginBottom: 2 }}>
                   Reported By
@@ -613,6 +696,77 @@ export const TicketDetailsPage: React.FC = () => {
                 <div style={{ fontWeight: 600, color: ticket.assignee ? 'var(--color-slate-900)' : 'var(--color-slate-400)' }}>
                   {assigneeName}
                 </div>
+
+                {/* Assignment Controls: Only SUPER_ADMIN can assign/reassign */}
+                {isSuperAdmin && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: '10px 12px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: 8,
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'var(--color-slate-600)',
+                        display: 'block',
+                        marginBottom: 6,
+                      }}
+                    >
+                      Assign Responsible Employee
+                    </span>
+
+                    {assignMessage && (
+                      <div
+                        style={{
+                          fontSize: '0.725rem',
+                          color: assignMessage.type === 'error' ? '#dc2626' : '#16a34a',
+                          marginBottom: 6,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {assignMessage.text}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <select
+                        value={selectedAssigneeId}
+                        onChange={e => setSelectedAssigneeId(e.target.value)}
+                        disabled={isAssigning}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          fontSize: '0.775rem',
+                          borderRadius: 6,
+                          border: '1px solid var(--color-slate-300)',
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        <option value="">-- Select Employee --</option>
+                        {employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({emp.employee_id})
+                          </option>
+                        ))}
+                      </select>
+
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={!selectedAssigneeId || selectedAssigneeId === ticket.assigned_to}
+                        isLoading={isAssigning}
+                        onClick={handleAssignTicket}
+                      >
+                        Save Assignment
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ borderTop: '1px solid var(--color-slate-100)', paddingTop: 10 }}>

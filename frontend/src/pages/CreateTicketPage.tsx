@@ -16,13 +16,14 @@ import {
 } from 'lucide-react';
 
 export const CreateTicketPage: React.FC = () => {
-  const { categories, departments, createTicket, uploadAttachment } = useTickets();
+  const { categories, departments, getSubcategoriesByCategory, createTicket, uploadAttachment } = useTickets();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('MEDIUM');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -34,13 +35,18 @@ export const CreateTicketPage: React.FC = () => {
     ? categories.filter(c => c.department_id === departmentId)
     : categories;
 
+  // Filter subcategories by selected category
+  const availableSubcategories = categoryId ? getSubcategoriesByCategory(categoryId) : [];
+
   const handleDepartmentChange = (deptId: string) => {
     setDepartmentId(deptId);
     setCategoryId('');
+    setSubcategoryId('');
   };
 
   const handleCategoryChange = (catId: string) => {
     setCategoryId(catId);
+    setSubcategoryId('');
     const cat = categories.find(c => c.id === catId);
     if (cat && !departmentId) {
       setDepartmentId(cat.department_id);
@@ -91,6 +97,7 @@ export const CreateTicketPage: React.FC = () => {
         title: title.trim(),
         description: description.trim(),
         category_id: categoryId,
+        subcategory_id: subcategoryId || undefined,
         priority,
       });
 
@@ -193,8 +200,24 @@ export const CreateTicketPage: React.FC = () => {
                 />
               </div>
 
+              {/* Subcategory Select (if category has subcategories) */}
+              {availableSubcategories.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <Select
+                    label="Subcategory"
+                    placeholder="-- Select Subcategory (Optional) --"
+                    value={subcategoryId}
+                    onChange={e => setSubcategoryId(e.target.value)}
+                    options={availableSubcategories.map(s => ({
+                      value: s.id,
+                      label: s.name,
+                    }))}
+                  />
+                </div>
+              )}
+
               {/* Priority Select */}
-              <div className="form-group">
+              <div className="form-group" style={{ marginTop: 16 }}>
                 <label className="form-label required">Priority Level</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as TicketPriority[]).map(p => {
@@ -273,7 +296,7 @@ export const CreateTicketPage: React.FC = () => {
                     Drop files here or click to browse
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)', marginTop: 4 }}>
-                    Max upload size: 10MB (Stored via FastAPI `POST /api/tickets/{'{ticket_id}'}/attachments`)
+                    Max upload size: 10MB (Stored via FastAPI POST /api/tickets/{'{id}'}/attachments)
                   </div>
                 </div>
 
@@ -319,7 +342,7 @@ export const CreateTicketPage: React.FC = () => {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => navigate('/my-tickets')}
+                  onClick={() => navigate('/employee/my-tickets')}
                 >
                   Cancel
                 </Button>
@@ -361,7 +384,7 @@ export const CreateTicketPage: React.FC = () => {
               <div style={{ paddingTop: 10, borderTop: '1px solid var(--color-slate-100)' }}>
                 <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Backend API:</span>
                 <p style={{ marginTop: 4, lineHeight: 1.4, color: 'var(--color-slate-500)' }}>
-                  Submissions create real tickets via <code>POST /api/tickets</code> and generate official sequential ticket IDs.
+                  Submissions create real tickets via <code>POST /api/tickets</code> with category and subcategory selection.
                 </p>
               </div>
             </div>

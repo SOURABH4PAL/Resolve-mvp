@@ -22,7 +22,6 @@ import {
   TrendingUp,
   RefreshCw,
 } from 'lucide-react';
-import { MOCK_ESCALATIONS } from '../mock/mockData';
 
 export const AdminDashboardPage: React.FC = () => {
   const { tickets, departments, categories, responsibilities, employees, isLoadingTickets, fetchTickets } = useTickets();
@@ -37,7 +36,13 @@ export const AdminDashboardPage: React.FC = () => {
   const resolvedTickets = tickets.filter(t => t.status === 'RESOLVED').length;
   const closedTickets = tickets.filter(t => t.status === 'CLOSED').length;
   const unassignedTickets = tickets.filter(t => !t.assigned_to).length;
-  const slaBreachedTickets = MOCK_ESCALATIONS.length;
+  // Dynamic SLA attention: open tickets with CRITICAL or HIGH priority
+  const criticalTickets = tickets.filter(
+    t => (t.priority === 'CRITICAL' || t.priority === 'HIGH') &&
+         t.status !== 'RESOLVED' &&
+         t.status !== 'CLOSED'
+  );
+  const slaBreachedTickets = criticalTickets.length;
 
   // Department breakdown
   const departmentBreakdown = departments.map(dept => {
@@ -548,8 +553,8 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Escalations Alert Card */}
-      {MOCK_ESCALATIONS.length > 0 && (
+      {/* High Priority & Critical Tickets Alert Card */}
+      {criticalTickets.length > 0 && (
         <div
           style={{
             backgroundColor: '#fef2f2',
@@ -562,18 +567,19 @@ export const AdminDashboardPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={20} style={{ color: '#dc2626' }} />
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#991b1b', margin: 0 }}>
-                Recent SLA Escalations & Breaches
+                High Priority & Critical Tickets Requiring Attention
               </h3>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/admin/sla')}>
-              View SLA Policies
+            <Button variant="secondary" size="sm" onClick={() => navigate('/admin/tickets')}>
+              Manage All Tickets
             </Button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {MOCK_ESCALATIONS.map(esc => (
+            {criticalTickets.slice(0, 5).map(ticket => (
               <div
-                key={esc.id}
+                key={ticket.id}
+                onClick={() => navigate(`/tickets/${ticket.id}`)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -582,26 +588,25 @@ export const AdminDashboardPage: React.FC = () => {
                   backgroundColor: '#ffffff',
                   borderRadius: 8,
                   border: '1px solid #fee2e2',
+                  cursor: 'pointer',
                 }}
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#dc2626' }}>
-                      {esc.ticket_number}
+                      {ticket.ticket_number}
                     </span>
                     <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-slate-900)' }}>
-                      {esc.title}
+                      {ticket.title}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-                    Dept: {esc.department} • Assigned Employee: {esc.responsible_employee_name}
+                    Dept: {ticket.category?.department?.name || 'Department'} • Category: {ticket.category?.name || 'General'} • Assignee: {ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned')}
                   </div>
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#b91c1c' }}>
-                    {esc.hours_elapsed}h elapsed (Limit: {esc.sla_limit_hours}h)
-                  </span>
+                  <PriorityBadge priority={ticket.priority} />
                 </div>
               </div>
             ))}

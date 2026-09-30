@@ -112,4 +112,40 @@ export const api = {
 
   upload: <T>(endpoint: string, formData: FormData, options?: RequestOptions) =>
     apiClient<T>(endpoint, { ...options, method: 'POST', body: formData, isFormData: true }),
+
+  downloadBlob: async (endpoint: string): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+
+    const response = await fetch(url, { method: 'GET', headers });
+    if (!response.ok) {
+      let errorMsg = `Download failed with status ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson.detail) errorMsg = errJson.detail;
+      } catch {
+        // ignore
+      }
+      throw new ApiError(response.status, errorMsg);
+    }
+    return await response.blob();
+  },
+
+  downloadFile: async (endpoint: string, filename: string): Promise<void> => {
+    const blob = await api.downloadBlob(endpoint);
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
 };
+
