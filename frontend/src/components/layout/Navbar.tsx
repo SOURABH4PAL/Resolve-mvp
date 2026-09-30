@@ -4,7 +4,7 @@ import { Bell, LogOut, User as UserIcon, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
-  const { currentUser, logout, switchUserRole } = useAuth();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
@@ -44,8 +44,8 @@ export const Navbar: React.FC = () => {
       </div>
 
       <div className="navbar-right">
-        {/* Quick Role Switcher for Live Demo */}
-        {switchUserRole && (
+        {/* Current User Role Badge */}
+        {currentUser && (
           <div
             style={{
               display: 'flex',
@@ -64,27 +64,9 @@ export const Navbar: React.FC = () => {
                 color: isSuperAdmin ? '#dc2626' : 'var(--color-primary-600)',
               }}
             />
-            <span style={{ fontWeight: 600, color: 'var(--color-slate-600)' }}>Role:</span>
-            <select
-              value={isSuperAdmin ? 'SUPER_ADMIN' : 'EMPLOYEE'}
-              onChange={e => {
-                const target = e.target.value as 'SUPER_ADMIN' | 'EMPLOYEE';
-                switchUserRole(target);
-                navigate(target === 'SUPER_ADMIN' ? '/admin/dashboard' : '/employee/dashboard');
-              }}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                fontWeight: 700,
-                fontSize: '0.775rem',
-                color: isSuperAdmin ? '#991b1b' : '#3730a3',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="SUPER_ADMIN">Super Admin (Management)</option>
-              <option value="EMPLOYEE">Employee (Support Portal)</option>
-            </select>
+            <span style={{ fontWeight: 600, color: isSuperAdmin ? '#991b1b' : '#3730a3' }}>
+              {isSuperAdmin ? 'Super Admin' : 'Employee'}
+            </span>
           </div>
         )}
 

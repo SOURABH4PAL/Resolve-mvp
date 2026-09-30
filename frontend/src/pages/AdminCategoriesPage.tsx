@@ -5,10 +5,9 @@ import { Button } from '../components/common/Button';
 import { Table, Column } from '../components/common/Table';
 import { Category } from '../types';
 import { FolderTree, Route, UserCheck, CheckCircle2 } from 'lucide-react';
-import { MOCK_SUBCATEGORIES } from '../mock/mockData';
 
 export const AdminCategoriesPage: React.FC = () => {
-  const { categories, departments, responsibilities } = useTickets();
+  const { categories, departments, subcategories, responsibilities } = useTickets();
   const navigate = useNavigate();
 
   const columns: Column<Category>[] = [
@@ -67,7 +66,7 @@ export const AdminCategoriesPage: React.FC = () => {
       key: 'subcategories',
       header: 'Subcategories',
       render: cat => {
-        const subs = MOCK_SUBCATEGORIES.filter(s => s.category_id === cat.id);
+        const subs = subcategories.filter(s => s.category_id === cat.id);
         return (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {subs.length > 0 ? (

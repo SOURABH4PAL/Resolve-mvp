@@ -17,8 +17,8 @@ import {
   RefreshCw,
   Bell,
   HelpCircle,
+  AlertCircle,
 } from 'lucide-react';
-import { MOCK_NOTIFICATIONS } from '../mock/mockData';
 
 export const DashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
@@ -357,24 +357,32 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {MOCK_NOTIFICATIONS.slice(0, 3).map(notif => (
-                <div
-                  key={notif.id}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    backgroundColor: notif.is_read ? 'var(--color-slate-50)' : '#f5f3ff',
-                    borderLeft: `3px solid ${notif.is_read ? 'var(--color-slate-300)' : 'var(--color-primary-600)'}`,
-                  }}
-                >
-                  <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--color-slate-900)' }}>
-                    {notif.title}
+              {myTickets.length > 0 ? (
+                myTickets.slice(0, 3).map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => navigate(`/tickets/${t.id}`)}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      backgroundColor: 'var(--color-slate-50)',
+                      borderLeft: '3px solid var(--color-primary-600)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--color-slate-900)' }}>
+                      {t.ticket_number}: {t.title}
+                    </div>
+                    <div style={{ fontSize: '0.775rem', color: 'var(--color-slate-600)', marginTop: 2 }}>
+                      Status: <strong>{t.status.replace('_', ' ')}</strong> • Priority: {t.priority}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.775rem', color: 'var(--color-slate-600)', marginTop: 2 }}>
-                    {notif.message}
-                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-slate-400)', textAlign: 'center', padding: '16px 0' }}>
+                  No recent activity. Create a ticket to get started.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

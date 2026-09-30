@@ -34,6 +34,7 @@ export const AdminTicketManagementPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [targetEmployeeId, setTargetEmployeeId] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
 
   // Filtered tickets
   const filteredTickets = tickets.filter(ticket => {
@@ -69,19 +70,22 @@ export const AdminTicketManagementPage: React.FC = () => {
     e.stopPropagation();
     setSelectedTicket(ticket);
     setTargetEmployeeId(ticket.assigned_to || employees[0]?.id || '');
+    setReassignError(null);
     setReassignModalOpen(true);
   };
 
   const handleConfirmReassign = async () => {
     if (!selectedTicket || !targetEmployeeId) return;
     setIsAssigning(true);
+    setReassignError(null);
     try {
       const targetEmp = employees.find(e => e.id === targetEmployeeId || e.employee_id === targetEmployeeId);
       await assignTicket(selectedTicket.id, targetEmployeeId, targetEmp?.name);
       setReassignModalOpen(false);
       setSelectedTicket(null);
-    } catch (err) {
-      console.error('Failed to reassign ticket:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to reassign ticket on server.';
+      setReassignError(msg);
     } finally {
       setIsAssigning(false);
     }
@@ -367,6 +371,21 @@ export const AdminTicketManagementPage: React.FC = () => {
                 Category: {selectedTicket.category?.name || 'General'}
               </div>
             </div>
+
+            {reassignError && (
+              <div
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 6,
+                  color: '#991b1b',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {reassignError}
+              </div>
+            )}
 
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6, color: 'var(--color-slate-700)' }}>
