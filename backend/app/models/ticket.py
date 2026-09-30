@@ -52,3 +52,12 @@ class Ticket(Base):
     subcategory = relationship("Subcategory", back_populates="tickets")
     comments = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     attachments = relationship("TicketAttachment", back_populates="ticket", cascade="all, delete-orphan")
+
+    @property
+    def assigned_to_user_id(self):
+        return self.assigned_to
+
+    @assigned_to_user_id.setter
+    def assigned_to_user_id(self, value):
+        self.assigned_to = value
+

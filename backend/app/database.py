@@ -1,8 +1,13 @@
 """
 SQLAlchemy engine, session, and declarative Base.
+
+Safety:
+- SQLite: foreign_keys PRAGMA is enabled per-connection via an event listener.
+- Upload paths are resolved to absolute on write (handled in ticket_service).
+- SECRET_KEY is validated at startup in main.py.
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import get_settings
 
@@ -17,8 +22,16 @@ elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+")
 if db_url.startswith("sqlite"):
     engine = create_engine(
         db_url,
-        connect_args={"check_same_thread": False}
+        connect_args={"check_same_thread": False},
     )
+
+    # Enable FK enforcement for every new SQLite connection
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):  # noqa: ANN001
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 else:
     engine = create_engine(
         db_url,
@@ -40,4 +53,3 @@ def get_db():
         yield db
     finally:
         db.close()
-

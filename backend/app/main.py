@@ -32,6 +32,28 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+
+@app.on_event("startup")
+async def validate_secret_key() -> None:
+    """Refuse to start in non-development environments with the default SECRET_KEY."""
+    weak_defaults = {
+        "change-this-to-a-random-secret-key-in-production",
+        "secret",
+        "supersecret",
+        "",
+    }
+    if settings.ENVIRONMENT != "development" and settings.SECRET_KEY in weak_defaults:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value in non-development environments. "
+            "Set the SECRET_KEY environment variable before starting the server."
+        )
+    if settings.SECRET_KEY in weak_defaults:
+        logger.warning(
+            "WARNING: Using a weak default SECRET_KEY. "
+            "This is only acceptable in development. Set SECRET_KEY in production."
+        )
+
+
 # CORS Middleware (environment-driven, explicit origins without wildcard)
 app.add_middleware(
     CORSMiddleware,

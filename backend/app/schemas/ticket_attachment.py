@@ -9,7 +9,7 @@ class TicketAttachmentRead(BaseModel):
     ticket_id: str
     uploaded_by: str
     file_name: str
-    file_path: str
+    # file_path intentionally omitted — never expose local filesystem paths
     file_size: int
     mime_type: Optional[str] = None
     created_at: datetime

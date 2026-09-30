@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from app.models.ticket import TicketPriority, TicketStatus
 from app.schemas.user import UserRead
 from app.schemas.category import CategoryRead
@@ -13,6 +13,32 @@ class TicketCreate(BaseModel):
     category_id: str
     subcategory_id: Optional[str] = None
     priority: TicketPriority = TicketPriority.MEDIUM
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Title is required and must not be blank")
+        return v.strip()
+
+    @field_validator("description")
+    @classmethod
+    def description_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Description is required and must not be blank")
+        return v.strip()
+
+
+class TicketAssign(BaseModel):
+    assigned_to_user_id: Optional[str] = None
+    assignee_id: Optional[str] = None
+
+    @property
+    def target_assignee_id(self) -> str:
+        target = self.assigned_to_user_id or self.assignee_id
+        if not target or not target.strip():
+            raise ValueError("assigned_to_user_id or assignee_id is required")
+        return target.strip()
 
 
 class TicketStatusUpdate(BaseModel):
@@ -33,6 +59,7 @@ class TicketRead(BaseModel):
     category_id: str
     subcategory_id: Optional[str] = None
     assigned_to: Optional[str] = None
+    assigned_to_user_id: Optional[str] = None
     priority: TicketPriority
     status: TicketStatus
     resolved_at: Optional[datetime] = None
