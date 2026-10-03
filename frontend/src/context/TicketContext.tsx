@@ -212,7 +212,7 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Attempt dedicated assignment endpoint PUT /api/tickets/{id}/assign
     try {
       await api.put(`/tickets/${ticketId}/assign`, {
-        assigned_to: employeeId,
+        assigned_to_user_id: employeeId,
       });
       await fetchTickets();
     } catch (err: unknown) {

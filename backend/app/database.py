@@ -53,3 +53,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def init_db_schema():
+    """Ensure all tables and missing columns exist without losing existing data."""
+    Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        # Check if responsible_user_id exists in departments
+        try:
+            conn.execute(text("SELECT responsible_user_id FROM departments LIMIT 1"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE departments ADD COLUMN responsible_user_id VARCHAR(36) REFERENCES users(id)"))
+                conn.commit()
+            except Exception:
+                pass
+

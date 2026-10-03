@@ -6,7 +6,7 @@ backend_path = os.path.join(os.path.dirname(__file__), "backend")
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
-from app.database import SessionLocal, engine, Base
+from app.database import SessionLocal, engine, init_db_schema
 from app.models.user import User, UserRole
 from app.models.department import Department
 from app.models.category import Category
@@ -14,27 +14,34 @@ from app.models.subcategory import Subcategory
 from app.utils.security import get_password_hash
 
 def seed_database():
-    print("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    
+    print("Initializing database schema...")
+    init_db_schema()
+
     db = SessionLocal()
     try:
         print("Seeding demo data...")
 
         # 1. Departments
-        it_dept = db.query(Department).filter(Department.name == "IT Support").first()
-        if not it_dept:
-            it_dept = Department(name="IT Support", department_email="it@resolvehub.com")
-            db.add(it_dept)
-        
-        hr_dept = db.query(Department).filter(Department.name == "Human Resources").first()
-        if not hr_dept:
-            hr_dept = Department(name="Human Resources", department_email="hr@resolvehub.com")
-            db.add(hr_dept)
+        depts = {
+            "IT Support": "it@resolvehub.com",
+            "Human Resources": "hr@resolvehub.com",
+            "General": "general@resolvehub.com",
+        }
+        dept_objs = {}
+        for name, email in depts.items():
+            dept = db.query(Department).filter(Department.name == name).first()
+            if not dept:
+                dept = Department(name=name, department_email=email)
+                db.add(dept)
+            dept_objs[name] = dept
 
         db.commit()
-        db.refresh(it_dept)
-        db.refresh(hr_dept)
+        for dept in dept_objs.values():
+            db.refresh(dept)
+
+        it_dept = dept_objs["IT Support"]
+        hr_dept = dept_objs["Human Resources"]
+        gen_dept = dept_objs["General"]
 
         # 2. Categories
         hw_cat = db.query(Category).filter(Category.name == "Hardware", Category.department_id == it_dept.id).first()
@@ -52,10 +59,16 @@ def seed_database():
             payroll_cat = Category(name="Payroll", description="Payroll & compensation queries", department_id=hr_dept.id)
             db.add(payroll_cat)
 
+        gen_cat = db.query(Category).filter(Category.name == "General Inquiry", Category.department_id == gen_dept.id).first()
+        if not gen_cat:
+            gen_cat = Category(name="General Inquiry", description="General workplace questions and service requests", department_id=gen_dept.id)
+            db.add(gen_cat)
+
         db.commit()
         db.refresh(hw_cat)
         db.refresh(sw_cat)
         db.refresh(payroll_cat)
+        db.refresh(gen_cat)
 
         # 3. Subcategories
         subcats = [
@@ -64,6 +77,7 @@ def seed_database():
             (sw_cat.id, "OS Crash", "Operating system blue screen or crash"),
             (sw_cat.id, "VPN Access", "Virtual Private Network connection issues"),
             (payroll_cat.id, "Salary Discrepancy", "Issues with pay stub or bank transfer"),
+            (gen_cat.id, "Workplace Request", "Desk, access card, or general request"),
         ]
 
         for cat_id, sub_name, desc in subcats:
@@ -73,15 +87,7 @@ def seed_database():
 
         db.commit()
 
-        # Safely migrate any existing legacy RESOLVER roles in DB to EMPLOYEE
-        try:
-            from sqlalchemy import text
-            db.execute(text("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'RESOLVER'"))
-            db.commit()
-        except Exception:
-            db.rollback()
-
-        # 4. Users
+        # 4. Users (Including Department Leads & Normal Employees)
         users_to_create = [
             {
                 "employee_id": "EMP001",
@@ -89,7 +95,47 @@ def seed_database():
                 "email": "admin@resolvehub.com",
                 "password": "Admin123!",
                 "role": UserRole.SUPER_ADMIN,
-                "department_id": it_dept.id
+                "department_id": it_dept.id,
+            },
+            {
+                "employee_id": "EMP101",
+                "name": "Sourabh Pal",
+                "email": "sourabh.pal@resolvehub.com",
+                "password": "Password123!",
+                "role": UserRole.EMPLOYEE,
+                "department_id": it_dept.id,
+            },
+            {
+                "employee_id": "EMP102",
+                "name": "Aditya Yadav",
+                "email": "aditya.yadav@resolvehub.com",
+                "password": "Password123!",
+                "role": UserRole.EMPLOYEE,
+                "department_id": hr_dept.id,
+            },
+            {
+                "employee_id": "EMP103",
+                "name": "Saksham Gupta",
+                "email": "saksham.gupta@resolvehub.com",
+                "password": "Password123!",
+                "role": UserRole.EMPLOYEE,
+                "department_id": gen_dept.id,
+            },
+            {
+                "employee_id": "EMP104",
+                "name": "Jayesh Kansal",
+                "email": "jayesh.kansal@resolvehub.com",
+                "password": "Password123!",
+                "role": UserRole.EMPLOYEE,
+                "department_id": gen_dept.id,
+            },
+            {
+                "employee_id": "EMP105",
+                "name": "Ashish Rai",
+                "email": "ashish.rai@resolvehub.com",
+                "password": "Password123!",
+                "role": UserRole.EMPLOYEE,
+                "department_id": it_dept.id,
             },
             {
                 "employee_id": "EMP002",
@@ -97,7 +143,7 @@ def seed_database():
                 "email": "resolver@resolvehub.com",
                 "password": "Resolver123!",
                 "role": UserRole.EMPLOYEE,
-                "department_id": it_dept.id
+                "department_id": it_dept.id,
             },
             {
                 "employee_id": "EMP003",
@@ -105,10 +151,11 @@ def seed_database():
                 "email": "employee@resolvehub.com",
                 "password": "Employee123!",
                 "role": UserRole.EMPLOYEE,
-                "department_id": hr_dept.id
-            }
+                "department_id": hr_dept.id,
+            },
         ]
 
+        user_objs = {}
         for udata in users_to_create:
             existing = db.query(User).filter(User.email == udata["email"]).first()
             if not existing:
@@ -118,18 +165,37 @@ def seed_database():
                     email=udata["email"],
                     password_hash=get_password_hash(udata["password"]),
                     role=udata["role"],
-                    department_id=udata["department_id"]
+                    department_id=udata["department_id"],
                 )
                 db.add(user)
+                user_objs[udata["email"]] = user
                 print(f"Created demo user: {udata['email']} / {udata['password']} ({udata['role'].value})")
             else:
                 existing.role = udata["role"]
                 existing.password_hash = get_password_hash(udata["password"])
+                user_objs[udata["email"]] = existing
                 print(f"Updated demo user password & role: {udata['email']}")
 
+        db.commit()
+
+        # Re-fetch users for setting department responsibilities
+        sourabh = db.query(User).filter(User.email == "sourabh.pal@resolvehub.com").first()
+        aditya = db.query(User).filter(User.email == "aditya.yadav@resolvehub.com").first()
+        saksham = db.query(User).filter(User.email == "saksham.gupta@resolvehub.com").first()
+
+        # 5. Set Department Responsibility Mapping:
+        # IT Support -> Sourabh Pal
+        # Human Resources -> Aditya Yadav
+        # General -> Saksham Gupta
+        if sourabh and it_dept:
+            it_dept.responsible_user_id = sourabh.id
+        if aditya and hr_dept:
+            hr_dept.responsible_user_id = aditya.id
+        if saksham and gen_dept:
+            gen_dept.responsible_user_id = saksham.id
 
         db.commit()
-        print("Database seeded successfully!")
+        print("Database seeded successfully with Department Responsibility Mappings!")
 
     except Exception as e:
         db.rollback()

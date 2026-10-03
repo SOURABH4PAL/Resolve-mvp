@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     ALGORITHM: str = "HS256"
 
+    # Email & Notification Settings
+    EMAIL_BACKEND: str = "demo"
+    BASE_FRONTEND_URL: str = "http://localhost:5173"
+
     # App limits & storage
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 10

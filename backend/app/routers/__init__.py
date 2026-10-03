@@ -6,6 +6,7 @@ from app.routers.attachments import router as attachments_router
 from app.routers.departments import router as departments_router
 from app.routers.categories import router as categories_router
 from app.routers.subcategories import router as subcategories_router
+from app.routers.notifications import router as notifications_router
 
 __all__ = [
     "auth_router",
@@ -16,4 +17,5 @@ __all__ = [
     "departments_router",
     "categories_router",
     "subcategories_router",
+    "notifications_router",
 ]

@@ -10,10 +10,12 @@ from app.models.ticket_comment import TicketComment
 from app.models.ticket_attachment import TicketAttachment
 from app.models.category import Category
 from app.models.subcategory import Subcategory
+from app.models.department import Department
 from app.schemas.ticket import TicketCreate, TicketStatusUpdate, TicketResolve, TicketAssign
 from app.schemas.ticket_comment import TicketCommentCreate
 from app.utils.ticket_number import generate_ticket_number
 from app.config import get_settings
+from app.services import notification_service
 
 settings = get_settings()
 
@@ -88,6 +90,21 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
 
     ticket_num = generate_ticket_number(db)
 
+    # Check department responsible employee for auto-routing
+    department = db.query(Department).filter(Department.id == category.department_id).first()
+    assigned_to_id = None
+    initial_status = TicketStatus.OPEN
+
+    assignee = None
+    if department and department.responsible_user_id:
+        assignee = db.query(User).filter(
+            User.id == department.responsible_user_id,
+            User.is_active == True
+        ).first()
+        if assignee:
+            assigned_to_id = assignee.id
+            initial_status = TicketStatus.ASSIGNED
+
     ticket = Ticket(
         ticket_number=ticket_num,
         title=ticket_in.title,
@@ -95,12 +112,30 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
         created_by=current_user.id,
         category_id=ticket_in.category_id,
         subcategory_id=ticket_in.subcategory_id,
+        assigned_to=assigned_to_id,
         priority=ticket_in.priority,
-        status=TicketStatus.OPEN,
+        status=initial_status,
     )
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
+
+    if assignee:
+        _add_system_comment(
+            db,
+            ticket.id,
+            current_user.id,
+            f"Ticket automatically routed to {assignee.name} ({department.name} lead).",
+        )
+        db.commit()
+        # Generate simulated email notification for assignee
+        try:
+            notification_service.create_ticket_created_notification(
+                db, ticket, requester=current_user, assignee=assignee
+            )
+        except Exception:
+            pass
+
     return ticket
 
 
@@ -273,6 +308,23 @@ def update_ticket_status(
 
     db.commit()
     db.refresh(ticket)
+
+    try:
+        recipient_id = None
+        if current_user.id == ticket.assigned_to and ticket.created_by != current_user.id:
+            recipient_id = ticket.created_by
+        elif current_user.id == ticket.created_by and ticket.assigned_to:
+            recipient_id = ticket.assigned_to
+
+        if recipient_id:
+            recipient = db.query(User).filter(User.id == recipient_id).first()
+            if recipient:
+                notification_service.create_ticket_update_notification(
+                    db, ticket, actor=current_user, recipient=recipient, update_text=f"Status changed to {new_status.value}"
+                )
+    except Exception:
+        pass
+
     return ticket
 
 
@@ -362,6 +414,25 @@ def add_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+
+    # Notify recipient if public comment
+    if not comment_in.is_internal:
+        try:
+            recipient_id = None
+            if current_user.id == ticket.assigned_to and ticket.created_by != current_user.id:
+                recipient_id = ticket.created_by
+            elif current_user.id == ticket.created_by and ticket.assigned_to:
+                recipient_id = ticket.assigned_to
+
+            if recipient_id:
+                recipient = db.query(User).filter(User.id == recipient_id).first()
+                if recipient:
+                    notification_service.create_ticket_update_notification(
+                        db, ticket, actor=current_user, recipient=recipient, update_text=f"Reply: {comment_in.content}"
+                    )
+        except Exception:
+            pass
+
     return comment
 
 

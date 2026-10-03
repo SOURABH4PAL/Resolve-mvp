@@ -17,8 +17,9 @@ from app.routers import (
     departments_router,
     categories_router,
     subcategories_router,
+    notifications_router,
 )
-from app.database import engine
+from app.database import engine, init_db_schema
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("resolvehub")
@@ -34,8 +35,10 @@ app = FastAPI(
 
 
 @app.on_event("startup")
-async def validate_secret_key() -> None:
-    """Refuse to start in non-development environments with the default SECRET_KEY."""
+async def startup_event() -> None:
+    """Initialize DB schema and validate secret key."""
+    init_db_schema()
+
     weak_defaults = {
         "change-this-to-a-random-secret-key-in-production",
         "secret",
@@ -155,6 +158,7 @@ app.include_router(attachments_router, prefix=settings.API_PREFIX)
 app.include_router(departments_router, prefix=settings.API_PREFIX)
 app.include_router(categories_router, prefix=settings.API_PREFIX)
 app.include_router(subcategories_router, prefix=settings.API_PREFIX)
+app.include_router(notifications_router, prefix=settings.API_PREFIX)
 
 # Create Upload Directory
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
