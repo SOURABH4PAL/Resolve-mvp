@@ -35,7 +35,7 @@ app = FastAPI(
 
 
 @app.on_event("startup")
-async def startup_event() -> None:
+async def validate_secret_key() -> None:
     """Initialize DB schema and validate secret key."""
     init_db_schema()
 

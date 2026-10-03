@@ -50,7 +50,6 @@ def db():
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
         engine.dispose()
 
 
@@ -97,11 +96,11 @@ def make_subcategory(db, category_id, name="Laptop"):
     return sub
 
 
-def make_user(db, employee_id="EMP001", name="Alice", role=UserRole.EMPLOYEE, is_active=True):
+def make_user(db, employee_id="EMP001", name="Alice", role=UserRole.EMPLOYEE, is_active=True, email=None):
     user = User(
         employee_id=employee_id,
         name=name,
-        email=f"{employee_id}@example.com",
+        email=email or f"{employee_id.lower()}@example.com",
         password_hash=get_password_hash("password123"),
         role=role,
         is_active=is_active,

@@ -11,7 +11,11 @@ class Department(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), unique=True, nullable=False, index=True)
     department_email = Column(String(255), nullable=True)
-    responsible_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    responsible_user_id = Column(
+        String(36),
+        ForeignKey("users.id", use_alter=True, name="fk_departments_responsible_user_id"),
+        nullable=True
+    )
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -87,7 +87,7 @@ def seed_database():
 
         db.commit()
 
-        # 4. Users (Including Department Leads & Normal Employees)
+        # 4. Users (Including Department Leads & Normal Employees with Dailoqa company domains)
         users_to_create = [
             {
                 "employee_id": "EMP001",
@@ -100,7 +100,7 @@ def seed_database():
             {
                 "employee_id": "EMP101",
                 "name": "Sourabh Pal",
-                "email": "sourabh.pal@resolvehub.com",
+                "email": "sourabh.pal@dailoqa.com",
                 "password": "Password123!",
                 "role": UserRole.EMPLOYEE,
                 "department_id": it_dept.id,
@@ -108,7 +108,7 @@ def seed_database():
             {
                 "employee_id": "EMP102",
                 "name": "Aditya Yadav",
-                "email": "aditya.yadav@resolvehub.com",
+                "email": "aditya.yadav@dailoqa.com",
                 "password": "Password123!",
                 "role": UserRole.EMPLOYEE,
                 "department_id": hr_dept.id,
@@ -116,7 +116,7 @@ def seed_database():
             {
                 "employee_id": "EMP103",
                 "name": "Saksham Gupta",
-                "email": "saksham.gupta@resolvehub.com",
+                "email": "saksham.gupta@dailoqa.com",
                 "password": "Password123!",
                 "role": UserRole.EMPLOYEE,
                 "department_id": gen_dept.id,
@@ -124,7 +124,7 @@ def seed_database():
             {
                 "employee_id": "EMP104",
                 "name": "Jayesh Kansal",
-                "email": "jayesh.kansal@resolvehub.com",
+                "email": "jayesh.kansal@dailoqa.com",
                 "password": "Password123!",
                 "role": UserRole.EMPLOYEE,
                 "department_id": gen_dept.id,
@@ -132,7 +132,7 @@ def seed_database():
             {
                 "employee_id": "EMP105",
                 "name": "Ashish Rai",
-                "email": "ashish.rai@resolvehub.com",
+                "email": "ashish.rai@dailoqa.com",
                 "password": "Password123!",
                 "role": UserRole.EMPLOYEE,
                 "department_id": it_dept.id,
@@ -157,7 +157,9 @@ def seed_database():
 
         user_objs = {}
         for udata in users_to_create:
-            existing = db.query(User).filter(User.email == udata["email"]).first()
+            existing = db.query(User).filter(
+                (User.employee_id == udata["employee_id"]) | (User.email == udata["email"])
+            ).first()
             if not existing:
                 user = User(
                     employee_id=udata["employee_id"],
@@ -171,17 +173,20 @@ def seed_database():
                 user_objs[udata["email"]] = user
                 print(f"Created demo user: {udata['email']} / {udata['password']} ({udata['role'].value})")
             else:
+                existing.name = udata["name"]
+                existing.email = udata["email"]
                 existing.role = udata["role"]
+                existing.department_id = udata["department_id"]
                 existing.password_hash = get_password_hash(udata["password"])
                 user_objs[udata["email"]] = existing
-                print(f"Updated demo user password & role: {udata['email']}")
+                print(f"Updated demo user profile & email: {udata['email']}")
 
         db.commit()
 
         # Re-fetch users for setting department responsibilities
-        sourabh = db.query(User).filter(User.email == "sourabh.pal@resolvehub.com").first()
-        aditya = db.query(User).filter(User.email == "aditya.yadav@resolvehub.com").first()
-        saksham = db.query(User).filter(User.email == "saksham.gupta@resolvehub.com").first()
+        sourabh = db.query(User).filter(User.email == "sourabh.pal@dailoqa.com").first()
+        aditya = db.query(User).filter(User.email == "aditya.yadav@dailoqa.com").first()
+        saksham = db.query(User).filter(User.email == "saksham.gupta@dailoqa.com").first()
 
         # 5. Set Department Responsibility Mapping:
         # IT Support -> Sourabh Pal
@@ -195,7 +200,7 @@ def seed_database():
             gen_dept.responsible_user_id = saksham.id
 
         db.commit()
-        print("Database seeded successfully with Department Responsibility Mappings!")
+        print("Database seeded successfully with Dailoqa company email mappings!")
 
     except Exception as e:
         db.rollback()
