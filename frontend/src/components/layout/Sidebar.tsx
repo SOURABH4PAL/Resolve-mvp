@@ -34,7 +34,7 @@ export const Sidebar: React.FC = () => {
     t => t.assigned_to === currentUser?.id && t.status !== 'CLOSED' && t.status !== 'RESOLVED'
   ).length;
   const openCompanyTicketsCount = tickets.filter(
-    t => t.status === 'OPEN' || t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS'
+    t => t.status !== 'CLOSED' && t.status !== 'RESOLVED'
   ).length;
 
   const getInitials = (name?: string) => {
@@ -141,6 +141,7 @@ export const Sidebar: React.FC = () => {
             >
               <Clock size={18} />
               <span>SLA & Escalation</span>
+              <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4, backgroundColor: '#fef3c7', color: '#92400e' }}>Soon</span>
             </NavLink>
 
             <NavLink
@@ -218,6 +219,14 @@ export const Sidebar: React.FC = () => {
               {assignedToMeCount > 0 && (
                 <span className="nav-badge active-badge">{assignedToMeCount}</span>
               )}
+            </NavLink>
+
+            <NavLink
+              to="/employee/faq"
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <BookOpen size={18} />
+              <span>FAQ / Help</span>
             </NavLink>
 
             <div className="nav-section-title">Personal</div>

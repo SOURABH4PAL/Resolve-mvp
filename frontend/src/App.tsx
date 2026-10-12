@@ -15,6 +15,7 @@ import { MyTicketsPage } from './pages/MyTicketsPage';
 import { AssignedToMePage } from './pages/AssignedToMePage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { EmployeeFaqPage } from './pages/EmployeeFaqPage';
 
 // Super Admin Pages
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
@@ -186,6 +187,14 @@ export const App: React.FC = () => {
                 element={
                   <RoleRoute allowedRole="EMPLOYEE">
                     <ProfilePage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/employee/faq"
+                element={
+                  <RoleRoute allowedRole="EMPLOYEE">
+                    <EmployeeFaqPage />
                   </RoleRoute>
                 }
               />

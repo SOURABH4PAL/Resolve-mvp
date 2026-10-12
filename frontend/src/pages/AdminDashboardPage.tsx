@@ -17,7 +17,6 @@ import {
   Route,
   ArrowRight,
   ShieldAlert,
-  Flame,
   UserCheck,
   TrendingUp,
   RefreshCw,
@@ -408,24 +407,6 @@ export const AdminDashboardPage: React.FC = () => {
           <div>
             <div className="stat-val">{closedTickets}</div>
             <div className="stat-label">Closed</div>
-          </div>
-        </div>
-
-        <div
-          className="stat-card"
-          style={{
-            borderColor: slaBreachedTickets > 0 ? '#fecaca' : undefined,
-            backgroundColor: slaBreachedTickets > 0 ? '#fef2f2' : undefined,
-          }}
-        >
-          <div className="stat-icon" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-            <Flame size={20} />
-          </div>
-          <div>
-            <div className="stat-val" style={{ color: slaBreachedTickets > 0 ? '#dc2626' : undefined }}>
-              {slaBreachedTickets}
-            </div>
-            <div className="stat-label">SLA Breached</div>
           </div>
         </div>
 

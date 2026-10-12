@@ -158,8 +158,14 @@ def get_user_tickets(db: Session, current_user: User) -> List[Ticket]:
 
 
 def get_ticket_by_id(db: Session, ticket_id: str, current_user: User) -> Ticket:
-    """Fetch ticket details ensuring ownership, assigned employee, or admin access."""
+    """Fetch ticket details ensuring ownership, assigned employee, or admin access.
+    
+    Supports lookup by both UUID (id) and human-readable ticket_number (e.g. TKT-000101).
+    """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        # Fallback: try matching by ticket_number (e.g. TKT-000101)
+        ticket = db.query(Ticket).filter(Ticket.ticket_number == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 

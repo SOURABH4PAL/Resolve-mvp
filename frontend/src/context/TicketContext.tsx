@@ -43,8 +43,15 @@ interface TicketContextType {
     responsibilityId: string,
     responsibleEmployeeId: string,
     responsibleEmployeeName: string,
-    responsibleEmployeeEmail: string
+    responsibleEmployeeEmail: string,
+    categoryDetails?: {
+      department_id?: string;
+      department_name?: string;
+      category_id?: string;
+      category_name?: string;
+    }
   ) => void;
+  removeCategoryResponsibility: (responsibilityId: string) => void;
   getComments: (ticketId: string) => Promise<TicketComment[]>;
   addComment: (ticketId: string, content: string, is_internal?: boolean) => Promise<TicketComment>;
   getAttachments: (ticketId: string) => Promise<TicketAttachment[]>;
@@ -231,7 +238,13 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     responsibilityId: string,
     responsibleEmployeeId: string,
     responsibleEmployeeName: string,
-    responsibleEmployeeEmail: string
+    responsibleEmployeeEmail: string,
+    categoryDetails?: {
+      department_id?: string;
+      department_name?: string;
+      category_id?: string;
+      category_name?: string;
+    }
   ) => {
     setResponsibilities(prev => {
       const exists = prev.some(r => r.id === responsibilityId);
@@ -243,6 +256,10 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 responsible_employee_id: responsibleEmployeeId,
                 responsible_employee_name: responsibleEmployeeName,
                 responsible_employee_email: responsibleEmployeeEmail,
+                ...(categoryDetails?.department_id && { department_id: categoryDetails.department_id }),
+                ...(categoryDetails?.department_name && { department_name: categoryDetails.department_name }),
+                ...(categoryDetails?.category_id && { category_id: categoryDetails.category_id }),
+                ...(categoryDetails?.category_name && { category_name: categoryDetails.category_name }),
                 updated_at: new Date().toISOString(),
               }
             : r
@@ -252,10 +269,10 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         ...prev,
         {
           id: responsibilityId,
-          department_id: '',
-          category_id: '',
-          category_name: '',
-          department_name: '',
+          department_id: categoryDetails?.department_id || '',
+          category_id: categoryDetails?.category_id || '',
+          category_name: categoryDetails?.category_name || '',
+          department_name: categoryDetails?.department_name || '',
           responsible_employee_id: responsibleEmployeeId,
           responsible_employee_name: responsibleEmployeeName,
           responsible_employee_email: responsibleEmployeeEmail,
@@ -263,6 +280,22 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         },
       ];
     });
+  };
+
+  const removeCategoryResponsibility = (responsibilityId: string) => {
+    setResponsibilities(prev =>
+      prev.map(r =>
+        r.id === responsibilityId || r.category_id === responsibilityId
+          ? {
+              ...r,
+              responsible_employee_id: '',
+              responsible_employee_name: '',
+              responsible_employee_email: '',
+              updated_at: new Date().toISOString(),
+            }
+          : r
+      )
+    );
   };
 
   const getComments = async (ticketId: string): Promise<TicketComment[]> => {
@@ -324,6 +357,7 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reopenTicket,
         assignTicket,
         updateCategoryResponsibility,
+        removeCategoryResponsibility,
         getComments,
         addComment,
         getAttachments,
