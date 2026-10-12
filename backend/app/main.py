@@ -18,6 +18,12 @@ from app.routers import (
     categories_router,
     subcategories_router,
     notifications_router,
+    sla_policies_router,
+    escalations_router,
+    faqs_router,
+    support_teams_router,
+    routing_rules_router,
+    dashboard_router,
 )
 from app.database import engine, init_db_schema
 
@@ -115,24 +121,41 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Database-aware Health Check
+# Database and Schema-aware Health Check
 def perform_health_check():
     db_status = "connected"
+    schema_status = "ready"
     is_healthy = True
+    missing_tables = []
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+            from sqlalchemy import inspect
+            inspector = inspect(conn)
+            existing_tables = set(inspector.get_table_names())
+            required_tables = {"users", "tickets", "departments", "categories"}
+            missing = required_tables - existing_tables
+            if missing:
+                schema_status = "not-ready"
+                missing_tables = sorted(list(missing))
+                is_healthy = False
     except Exception as exc:
         logger.error(f"Health-check database ping failed: {exc}")
         db_status = "disconnected"
+        schema_status = "unknown"
         is_healthy = False
 
     payload = {
         "status": "healthy" if is_healthy else "unhealthy",
         "database": db_status,
+        "schema": schema_status,
         "version": "1.0.0",
         "environment": settings.ENVIRONMENT,
     }
+    if missing_tables:
+        payload["missing_tables"] = missing_tables
+
     status_code = status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(status_code=status_code, content=payload)
 
@@ -159,6 +182,12 @@ app.include_router(departments_router, prefix=settings.API_PREFIX)
 app.include_router(categories_router, prefix=settings.API_PREFIX)
 app.include_router(subcategories_router, prefix=settings.API_PREFIX)
 app.include_router(notifications_router, prefix=settings.API_PREFIX)
+app.include_router(sla_policies_router, prefix=settings.API_PREFIX)
+app.include_router(escalations_router, prefix=settings.API_PREFIX)
+app.include_router(faqs_router, prefix=settings.API_PREFIX)
+app.include_router(support_teams_router, prefix=settings.API_PREFIX)
+app.include_router(routing_rules_router, prefix=settings.API_PREFIX)
+app.include_router(dashboard_router, prefix=settings.API_PREFIX)
 
 # Create Upload Directory
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)

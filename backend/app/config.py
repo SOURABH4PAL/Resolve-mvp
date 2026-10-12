@@ -23,7 +23,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Database
-    DATABASE_URL: str = "sqlite:///./resolvehub.db"
+    DATABASE_URL: str = f"sqlite:///{os.path.join(backend_dir, 'resolvehub.db').replace('\\', '/')}"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def parse_database_url(cls, v: str) -> str:
+        if isinstance(v, str) and v.startswith("sqlite:///."):
+            rel_path = v.replace("sqlite:///.", "", 1).lstrip("/\\")
+            abs_path = os.path.join(backend_dir, rel_path).replace("\\", "/")
+            return f"sqlite:///{abs_path}"
+        return v
 
     # JWT
     SECRET_KEY: str = "change-this-to-a-random-secret-key-in-production"

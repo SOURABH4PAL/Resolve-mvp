@@ -10,8 +10,8 @@ class Notification(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    sender_email = Column(String(255), nullable=False)
-    recipient_email = Column(String(255), nullable=False)
+    sender_email = Column(String(255), nullable=False, default="system@resolvehub.com")
+    recipient_email = Column(String(255), nullable=False, default="user@resolvehub.com")
     ticket_id = Column(String(36), ForeignKey("tickets.id"), nullable=True)
     ticket_number = Column(String(50), nullable=True)
     title = Column(String(255), nullable=False)
