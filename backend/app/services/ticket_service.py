@@ -214,10 +214,10 @@ def assign_ticket(db: Session, ticket_id: str, assign_in: TicketAssign, current_
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Assignee not found or is not active",
         )
-    if assignee.role != UserRole.EMPLOYEE:
+    if assignee.role not in {UserRole.EMPLOYEE, UserRole.RESOLVER}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Tickets can only be assigned to employees",
+            detail="Tickets can only be assigned to employees or resolvers",
         )
 
     ticket.assigned_to = assignee.id
