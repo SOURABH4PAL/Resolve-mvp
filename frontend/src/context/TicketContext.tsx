@@ -59,6 +59,13 @@ interface TicketContextType {
   downloadAttachment: (attachmentId: string, filename: string) => Promise<void>;
   getCategoriesByDepartment: (departmentId: string) => Category[];
   getSubcategoriesByCategory: (categoryId: string) => Subcategory[];
+  createDepartment: (data: { name: string; department_email?: string }) => Promise<Department>;
+  updateDepartment: (deptId: string, data: { name?: string; department_email?: string; is_active?: boolean }) => Promise<Department>;
+  deleteDepartment: (deptId: string) => Promise<void>;
+  createEmployee: (data: { employee_id: string; name: string; email: string; password?: string; role?: string; department_id?: string }) => Promise<User>;
+  updateEmployee: (userId: string, data: { name?: string; email?: string; employee_id?: string; role?: string; department_id?: string; is_active?: boolean; password?: string }) => Promise<User>;
+  deleteEmployee: (userId: string) => Promise<void>;
+  checkSlaEscalations: () => Promise<any>;
 }
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined);
@@ -325,6 +332,51 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return subcategories.filter(s => s.category_id === categoryId);
   };
 
+  const createDepartment = async (data: { name: string; department_email?: string }): Promise<Department> => {
+    const created = await api.post<Department>('/departments', data);
+    setDepartments(prev => [...prev, created]);
+    return created;
+  };
+
+  const updateDepartment = async (deptId: string, data: { name?: string; department_email?: string; is_active?: boolean }): Promise<Department> => {
+    const updated = await api.put<Department>(`/departments/${deptId}`, data);
+    setDepartments(prev => prev.map(d => d.id === deptId ? updated : d));
+    return updated;
+  };
+
+  const deleteDepartment = async (deptId: string): Promise<void> => {
+    await api.delete(`/departments/${deptId}`);
+    setDepartments(prev => prev.filter(d => d.id !== deptId));
+  };
+
+  const createEmployee = async (data: { employee_id: string; name: string; email: string; password?: string; role?: string; department_id?: string }): Promise<User> => {
+    const created = await api.post<User>('/users', {
+      ...data,
+      password: data.password || 'Password123!',
+      role: data.role || 'EMPLOYEE',
+      is_active: true,
+    });
+    setEmployees(prev => [...prev, created]);
+    return created;
+  };
+
+  const updateEmployee = async (userId: string, data: { name?: string; email?: string; employee_id?: string; role?: string; department_id?: string; is_active?: boolean; password?: string }): Promise<User> => {
+    const updated = await api.put<User>(`/users/${userId}`, data);
+    setEmployees(prev => prev.map(e => e.id === userId ? updated : e));
+    return updated;
+  };
+
+  const deleteEmployee = async (userId: string): Promise<void> => {
+    await api.delete(`/users/${userId}`);
+    setEmployees(prev => prev.filter(e => e.id !== userId));
+  };
+
+  const checkSlaEscalations = async (): Promise<any> => {
+    const result = await api.post<any>('/sla-policies/check-escalations');
+    await fetchTickets();
+    return result;
+  };
+
   return (
     <TicketContext.Provider
       value={{
@@ -355,6 +407,13 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         downloadAttachment,
         getCategoriesByDepartment,
         getSubcategoriesByCategory,
+        createDepartment,
+        updateDepartment,
+        deleteDepartment,
+        createEmployee,
+        updateEmployee,
+        deleteEmployee,
+        checkSlaEscalations,
       }}
     >
       {children}

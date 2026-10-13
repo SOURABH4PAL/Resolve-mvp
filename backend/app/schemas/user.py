@@ -21,6 +21,16 @@ class UserStatusUpdate(BaseModel):
     is_active: bool
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    employee_id: Optional[str] = None
+    role: Optional[UserRole] = None
+    department_id: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+
 class UserRead(UserBase):
     id: str
     created_at: datetime

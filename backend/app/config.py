@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def parse_database_url(cls, v: str) -> str:
+        if isinstance(v, str) and v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql://", 1)
         if isinstance(v, str) and v.startswith("sqlite:///."):
             rel_path = v.replace("sqlite:///.", "", 1).lstrip("/\\")
             abs_path = os.path.join(backend_dir, rel_path).replace("\\", "/")

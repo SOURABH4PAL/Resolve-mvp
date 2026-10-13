@@ -13,11 +13,15 @@ router = APIRouter(prefix="/departments", tags=["Departments"])
 
 @router.get("", response_model=List[DepartmentRead])
 def list_departments(
+    include_inactive: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all active departments."""
-    return db.query(Department).filter(Department.is_active == True).order_by(Department.name.asc()).all()
+    """List all departments (active by default, or all if include_inactive=True)."""
+    query = db.query(Department)
+    if not include_inactive:
+        query = query.filter(Department.is_active == True)
+    return query.order_by(Department.name.asc()).all()
 
 
 @router.get("/{dept_id}", response_model=DepartmentRead)

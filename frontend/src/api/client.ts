@@ -42,8 +42,10 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     body = JSON.stringify(options.body);
   }
 
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+  const apiPath = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+  const url = baseUrl ? `${baseUrl}${apiPath}` : apiPath;
 
   try {
     const response = await fetch(url, {
@@ -119,8 +121,10 @@ export const api = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+    const apiPath = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+    const url = baseUrl ? `${baseUrl}${apiPath}` : apiPath;
 
     const response = await fetch(url, { method: 'GET', headers });
     if (!response.ok) {

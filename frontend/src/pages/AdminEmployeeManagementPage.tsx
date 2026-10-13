@@ -13,10 +13,25 @@ import {
   UserCheck,
   CheckCircle2,
   PlusCircle,
+  Plus,
+  Edit2,
+  Trash2,
+  AlertCircle,
+  KeyRound,
 } from 'lucide-react';
 
 export const AdminEmployeeManagementPage: React.FC = () => {
-  const { employees, responsibilities, categories, tickets, updateCategoryResponsibility } = useTickets();
+  const {
+    employees,
+    departments,
+    responsibilities,
+    categories,
+    tickets,
+    updateCategoryResponsibility,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
+  } = useTickets();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
@@ -25,10 +40,30 @@ export const AdminEmployeeManagementPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const pageSize = 10;
 
-  // Edit Responsibility Modal
-  const [modalOpen, setModalOpen] = useState(false);
+  // Notification banners
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Assign Responsibility Modal
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [targetEmployee, setTargetEmployee] = useState<User | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+
+  // Create / Edit Employee Modal
+  const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
+  const [empId, setEmpId] = useState('');
+  const [empName, setEmpName] = useState('');
+  const [empEmail, setEmpEmail] = useState('');
+  const [empPassword, setEmpPassword] = useState('');
+  const [empDeptId, setEmpDeptId] = useState('');
+  const [empRole, setEmpRole] = useState<'EMPLOYEE' | 'SUPER_ADMIN'>('EMPLOYEE');
+  const [empIsActive, setEmpIsActive] = useState(true);
+
+  // Delete Confirmation Modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [empToDelete, setEmpToDelete] = useState<User | null>(null);
 
   const handleSearchChange = (term: string) => {
     setSearchTerm(term);
@@ -50,6 +85,127 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const handleOpenCreateEmployee = () => {
+    setEditingEmployee(null);
+    setEmpId(`DLQ-EMP-${String(employees.length + 1).padStart(3, '0')}`);
+    setEmpName('');
+    setEmpEmail('');
+    setEmpPassword('Password123!');
+    setEmpDeptId(departments[0]?.id || '');
+    setEmpRole('EMPLOYEE');
+    setEmpIsActive(true);
+    setErrorMsg('');
+    setEmployeeModalOpen(true);
+  };
+
+  const handleOpenEditEmployee = (emp: User) => {
+    setEditingEmployee(emp);
+    setEmpId(emp.employee_id);
+    setEmpName(emp.name);
+    setEmpEmail(emp.email);
+    setEmpPassword('');
+    setEmpDeptId(emp.department_id || '');
+    setEmpRole(emp.role);
+    setEmpIsActive(emp.is_active);
+    setErrorMsg('');
+    setEmployeeModalOpen(true);
+  };
+
+  const handleSaveEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empName.trim() || !empEmail.trim() || !empId.trim()) {
+      setErrorMsg('Name, email, and employee ID are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      if (editingEmployee) {
+        await updateEmployee(editingEmployee.id, {
+          name: empName.trim(),
+          email: empEmail.trim(),
+          employee_id: empId.trim(),
+          department_id: empDeptId || undefined,
+          role: empRole,
+          is_active: empIsActive,
+          password: empPassword.trim() || undefined,
+        });
+        setSuccessMsg(`Employee '${empName}' updated successfully!`);
+      } else {
+        await createEmployee({
+          name: empName.trim(),
+          email: empEmail.trim(),
+          employee_id: empId.trim(),
+          department_id: empDeptId || undefined,
+          role: empRole,
+          password: empPassword.trim() || 'Password123!',
+        });
+        setSuccessMsg(`Employee '${empName}' created successfully!`);
+      }
+      setEmployeeModalOpen(false);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Operation failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenDelete = (emp: User) => {
+    setEmpToDelete(emp);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!empToDelete) return;
+    setIsSubmitting(true);
+    try {
+      await deleteEmployee(empToDelete.id);
+      setSuccessMsg(`Employee '${empToDelete.name}' removed or deactivated.`);
+      setDeleteModalOpen(false);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to remove employee');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenAssignModal = (emp: User) => {
+    setTargetEmployee(emp);
+    setSelectedCategoryId(categories[0]?.id || '');
+    setAssignModalOpen(true);
+  };
+
+  const handleSaveResponsibility = () => {
+    if (!targetEmployee || !selectedCategoryId) return;
+
+    const existingResp = responsibilities.find(r => r.category_id === selectedCategoryId);
+    const cat = categories.find(c => c.id === selectedCategoryId);
+
+    if (existingResp) {
+      updateCategoryResponsibility(
+        existingResp.id,
+        targetEmployee.id,
+        targetEmployee.name,
+        targetEmployee.email
+      );
+    } else if (cat) {
+      updateCategoryResponsibility(
+        `resp-${Date.now()}`,
+        targetEmployee.id,
+        targetEmployee.name,
+        targetEmployee.email
+      );
+    }
+
+    setAssignModalOpen(false);
+    setTargetEmployee(null);
+    setSuccessMsg(`Assigned responsibility to ${targetEmployee.name}`);
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const filteredEmployees = employees.filter(emp => {
     if (searchTerm) {
       const matchName = emp.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -59,7 +215,8 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     }
 
     if (selectedDept !== 'ALL') {
-      const deptName = emp.department?.name;
+      const dept = departments.find(d => d.id === emp.department_id);
+      const deptName = dept?.name || emp.department?.name;
       if (deptName !== selectedDept) return false;
     }
 
@@ -73,8 +230,10 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       valA = a.employee_id || '';
       valB = b.employee_id || '';
     } else if (sortBy === 'department') {
-      valA = a.department?.name || '';
-      valB = b.department?.name || '';
+      const deptA = departments.find(d => d.id === a.department_id)?.name || a.department?.name || '';
+      const deptB = departments.find(d => d.id === b.department_id)?.name || b.department?.name || '';
+      valA = deptA;
+      valB = deptB;
     } else {
       valA = a.name || '';
       valB = b.name || '';
@@ -89,45 +248,11 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     currentPage * pageSize
   );
 
-  const handleOpenAssignModal = (emp: User) => {
-    setTargetEmployee(emp);
-    setSelectedCategoryId(categories[0]?.id || '');
-    setModalOpen(true);
-  };
-
-  const handleSaveResponsibility = () => {
-    if (!targetEmployee || !selectedCategoryId) return;
-
-    // Find if a responsibility entry exists for this category
-    const existingResp = responsibilities.find(r => r.category_id === selectedCategoryId);
-    const cat = categories.find(c => c.id === selectedCategoryId);
-
-    if (existingResp) {
-      updateCategoryResponsibility(
-        existingResp.id,
-        targetEmployee.id,
-        targetEmployee.name,
-        targetEmployee.email
-      );
-    } else if (cat) {
-      // Create new link
-      updateCategoryResponsibility(
-        `resp-${Date.now()}`,
-        targetEmployee.id,
-        targetEmployee.name,
-        targetEmployee.email
-      );
-    }
-
-    setModalOpen(false);
-    setTargetEmployee(null);
-  };
-
   const columns: Column<User>[] = [
     {
       key: 'employee_id',
       header: 'Employee ID',
-      width: '130px',
+      width: '120px',
       sortable: true,
       render: emp => (
         <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-primary-600)' }}>
@@ -151,34 +276,38 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       header: 'Department',
       width: '180px',
       sortable: true,
-      render: emp => (
-        <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)' }}>
-          {emp.department?.name || 'Operations'}
-        </span>
-      ),
+      render: emp => {
+        const dept = departments.find(d => d.id === emp.department_id);
+        const deptName = dept?.name || emp.department?.name || 'General';
+        return (
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)' }}>
+            {deptName}
+          </span>
+        );
+      },
     },
     {
       key: 'role',
-      header: 'System Role',
-      width: '130px',
-      render: () => (
+      header: 'Role',
+      width: '110px',
+      render: emp => (
         <span
           style={{
             fontSize: '0.7rem',
             fontWeight: 600,
             padding: '2px 8px',
             borderRadius: 'var(--radius-full)',
-            backgroundColor: '#e0e7ff',
-            color: '#3730a3',
+            backgroundColor: emp.role === 'SUPER_ADMIN' ? '#fef3c7' : '#e0e7ff',
+            color: emp.role === 'SUPER_ADMIN' ? '#92400e' : '#3730a3',
           }}
         >
-          EMPLOYEE
+          {emp.role}
         </span>
       ),
     },
     {
       key: 'responsibilities',
-      header: 'Category Responsibilities',
+      header: 'Support Responsibilities',
       render: emp => {
         const empResp = responsibilities
           .filter(r => r.responsible_employee_id === emp.id || r.responsible_employee_email === emp.email)
@@ -211,46 +340,68 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       },
     },
     {
-      key: 'active_tickets',
-      header: 'Active Load',
-      width: '120px',
-      render: emp => {
-        const activeCount = tickets.filter(
-          t => (t.assigned_to === emp.id || t.assigned_to === emp.employee_id) && t.status !== 'CLOSED' && t.status !== 'RESOLVED'
-        ).length;
-
-        return (
-          <span
-            style={{
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              padding: '2px 8px',
-              borderRadius: 10,
-              backgroundColor: activeCount > 2 ? '#fee2e2' : '#f1f5f9',
-              color: activeCount > 2 ? '#991b1b' : 'var(--color-slate-700)',
-            }}
-          >
-            {activeCount} Tickets
-          </span>
-        );
-      },
+      key: 'is_active',
+      header: 'Status',
+      width: '90px',
+      render: emp => (
+        <span
+          style={{
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-full)',
+            backgroundColor: emp.is_active ? '#ecfdf5' : '#f1f5f9',
+            color: emp.is_active ? '#065f46' : '#64748b',
+          }}
+        >
+          {emp.is_active ? 'Active' : 'Inactive'}
+        </span>
+      ),
     },
     {
       key: 'action',
-      header: '',
-      width: '160px',
+      header: 'Actions',
+      width: '200px',
       align: 'right',
       render: emp => (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={e => {
-            e.stopPropagation();
-            handleOpenAssignModal(emp);
-          }}
-        >
-          Assign Category
-        </Button>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={e => {
+              e.stopPropagation();
+              handleOpenAssignModal(emp);
+            }}
+            style={{ padding: '4px 6px', fontSize: '0.75rem' }}
+            title="Assign category routing"
+          >
+            Assign
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={e => {
+              e.stopPropagation();
+              handleOpenEditEmployee(emp);
+            }}
+            style={{ padding: '4px 6px' }}
+            title="Edit Employee"
+          >
+            <Edit2 size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={e => {
+              e.stopPropagation();
+              handleOpenDelete(emp);
+            }}
+            style={{ padding: '4px 6px', color: '#ef4444' }}
+            title="Delete Employee"
+          >
+            <Trash2 size={14} />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -258,14 +409,40 @@ export const AdminEmployeeManagementPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 className="page-title">Employee Management</h1>
+          <h1 className="page-title">Employee & Team Management</h1>
           <p className="page-subtitle">
-            Manage organization members and assign category support responsibilities to employees.
+            Manage organization members, onboard team interns, and configure category support assignments.
           </p>
         </div>
+        <Button
+          variant="primary"
+          onClick={handleOpenCreateEmployee}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Plus size={16} />
+          <span>Add Employee</span>
+        </Button>
       </div>
+
+      {successMsg && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 8,
+            backgroundColor: '#ecfdf5',
+            color: '#065f46',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: '0.875rem',
+          }}
+        >
+          <CheckCircle2 size={18} />
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {/* Info Callout */}
       <div
@@ -273,7 +450,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           gap: 12,
-          padding: '14px 18px',
+          padding: '12px 18px',
           backgroundColor: '#eff6ff',
           border: '1px solid #bfdbfe',
           borderRadius: 10,
@@ -283,9 +460,8 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       >
         <Shield size={20} style={{ flexShrink: 0 }} />
         <span>
-          <strong>Architecture Rule: ROLE != RESPONSIBILITY</strong>. All internal users hold the standard{' '}
-          <strong>EMPLOYEE</strong> role. Support duties are designated by assigning category responsibility to an
-          employee without changing their account role.
+          <strong>Role & Responsibility Routing:</strong> Internal employees and interns hold the{' '}
+          <strong>EMPLOYEE</strong> role. Support responsibilities route incoming category tickets to their dashboard.
         </span>
       </div>
 
@@ -305,7 +481,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
             />
             <input
               type="text"
-              placeholder="Search by employee name, email, or ID..."
+              placeholder="Search by name, email, or employee ID..."
               value={searchTerm}
               onChange={e => handleSearchChange(e.target.value)}
               style={{
@@ -331,9 +507,11 @@ export const AdminEmployeeManagementPage: React.FC = () => {
             }}
           >
             <option value="ALL">All Departments</option>
-            <option value="IT Support">IT Support</option>
-            <option value="Human Resources">Human Resources</option>
-            <option value="Finance & Payroll">Finance & Payroll</option>
+            {departments.map(d => (
+              <option key={d.id} value={d.name}>
+                {d.name}
+              </option>
+            ))}
           </select>
 
           {(searchTerm || selectedDept !== 'ALL') && (
@@ -369,43 +547,91 @@ export const AdminEmployeeManagementPage: React.FC = () => {
             onPageChange: setCurrentPage,
           }}
         />
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--color-slate-100)', fontSize: '0.825rem', color: 'var(--color-slate-500)' }}>
+          Showing {paginatedEmployees.length} of {sortedEmployees.length} total active organization members
+        </div>
       </div>
 
-      {/* Assign Category Responsibility Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Assign Category Responsibility"
-        footer={
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveResponsibility}>
-              Save Assignment
-            </Button>
-          </div>
-        }
-      >
-        {targetEmployee && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>Employee</div>
-              <div style={{ fontWeight: 600, color: 'var(--color-slate-900)', marginTop: 2 }}>
-                {targetEmployee.name} ({targetEmployee.employee_id})
+      {/* Create / Edit Employee Modal */}
+      {employeeModalOpen && (
+        <Modal
+          isOpen={employeeModalOpen}
+          onClose={() => setEmployeeModalOpen(false)}
+          title={editingEmployee ? 'Edit Employee / Team Member' : 'Add New Employee / Team Member'}
+        >
+          <form onSubmit={handleSaveEmployee} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {errorMsg && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 6,
+                  backgroundColor: '#fef2f2',
+                  color: '#991b1b',
+                  fontSize: '0.825rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>{errorMsg}</span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-                Department: {targetEmployee.department?.name || 'Operations'}
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g. Aditya Yadav"
+                  value={empName}
+                  onChange={e => setEmpName(e.target.value)}
+                  required
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                  Employee ID *
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g. DLQ-INT-001"
+                  value={empId}
+                  onChange={e => setEmpId(e.target.value)}
+                  required
+                  style={{ width: '100%' }}
+                />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
-                Select Support Category to Assign
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                Work Email *
+              </label>
+              <input
+                type="email"
+                className="input"
+                placeholder="e.g. aditya.yadav@dailoqa.com"
+                value={empEmail}
+                onChange={e => setEmpEmail(e.target.value)}
+                required
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                Department
               </label>
               <select
-                value={selectedCategoryId}
-                onChange={e => setSelectedCategoryId(e.target.value)}
+                value={empDeptId}
+                onChange={e => setEmpDeptId(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
@@ -415,20 +641,172 @@ export const AdminEmployeeManagementPage: React.FC = () => {
                   backgroundColor: '#ffffff',
                 }}
               >
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.department?.name || 'General'} &gt; {c.name}
+                <option value="">-- No Department Assigned --</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
                   </option>
                 ))}
               </select>
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 6 }}>
-                New tickets created by any employee under this category will automatically be routed to{' '}
-                <strong>{targetEmployee.name}</strong>.
-              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                  System Role
+                </label>
+                <select
+                  value={empRole}
+                  onChange={e => setEmpRole(e.target.value as 'EMPLOYEE' | 'SUPER_ADMIN')}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-slate-300)',
+                    fontSize: '0.875rem',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <option value="EMPLOYEE">EMPLOYEE (Standard / Intern)</option>
+                  <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+                  {editingEmployee ? 'Reset Password (optional)' : 'Password *'}
+                </label>
+                <input
+                  type="password"
+                  className="input"
+                  placeholder={editingEmployee ? 'Leave empty to keep current' : 'e.g. Password123!'}
+                  value={empPassword}
+                  onChange={e => setEmpPassword(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            {editingEmployee && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  id="empActiveStatus"
+                  checked={empIsActive}
+                  onChange={e => setEmpIsActive(e.target.checked)}
+                />
+                <label htmlFor="empActiveStatus" style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)', cursor: 'pointer' }}>
+                  Account is active
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <Button type="button" variant="ghost" onClick={() => setEmployeeModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : editingEmployee ? 'Save Changes' : 'Create Employee'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete / Deactivate Confirmation Modal */}
+      {deleteModalOpen && empToDelete && (
+        <Modal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          title="Delete / Deactivate Employee"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-slate-700)', lineHeight: 1.5 }}>
+              Are you sure you want to remove <strong>{empToDelete.name}</strong> ({empToDelete.email})?
+            </p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
+              If this member has associated ticket records or activity, the account will be safely deactivated rather than deleted to ensure history preservation.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+              <Button variant="ghost" onClick={() => setDeleteModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmDelete}
+                disabled={isSubmitting}
+                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {isSubmitting ? 'Processing...' : 'Confirm Remove'}
+              </Button>
             </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
+      )}
+
+      {/* Assign Category Responsibility Modal */}
+      {assignModalOpen && (
+        <Modal
+          isOpen={assignModalOpen}
+          onClose={() => setAssignModalOpen(false)}
+          title="Assign Category Responsibility"
+          footer={
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setAssignModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleSaveResponsibility}>
+                Save Assignment
+              </Button>
+            </div>
+          }
+        >
+          {targetEmployee && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>Employee</div>
+                <div style={{ fontWeight: 600, color: 'var(--color-slate-900)', marginTop: 2 }}>
+                  {targetEmployee.name} ({targetEmployee.employee_id})
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
+                  {targetEmployee.email}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
+                  Select Support Category to Assign
+                </label>
+                <select
+                  value={selectedCategoryId}
+                  onChange={e => setSelectedCategoryId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-slate-300)',
+                    fontSize: '0.875rem',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  {categories.map(c => {
+                    const dept = departments.find(d => d.id === c.department_id);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {dept?.name || c.department?.name || 'General'} &gt; {c.name}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 6 }}>
+                  New tickets created under this category will automatically be routed to{' '}
+                  <strong>{targetEmployee.name}</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   );
 };
