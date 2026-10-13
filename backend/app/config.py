@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # App limits & storage
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
+    ALLOWED_EXTENSIONS: List[str] = [
+        ".pdf", ".png", ".jpg", ".jpeg", ".txt", ".docx", ".xlsx", ".csv", ".doc"
+    ]
 
     # CORS configuration (explicit origins, no wildcard when credentials enabled)
     CORS_ORIGINS: List[str] = [

@@ -74,15 +74,19 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isAuthenticated) return;
     setIsLoadingMasterData(true);
     try {
-      const [deptList, catList] = await Promise.all([
+      const [deptList, catList, empList] = await Promise.all([
         api.get<Department[]>('/departments').catch(() => null),
         api.get<Category[]>('/categories').catch(() => null),
+        api.get<User[]>('/users').catch(() => null),
       ]);
       if (deptList && deptList.length > 0) {
         setDepartments(deptList);
       }
       if (catList && catList.length > 0) {
         setCategories(catList);
+      }
+      if (empList && empList.length > 0) {
+        setEmployees(empList);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch departments and categories';

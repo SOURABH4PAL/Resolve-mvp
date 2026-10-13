@@ -17,6 +17,8 @@ from app.routers import (
     departments_router,
     categories_router,
     subcategories_router,
+    reports_router,
+    notifications_router,
 )
 from app.database import engine
 
@@ -28,8 +30,9 @@ settings = get_settings()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
+    openapi_url="/openapi.json" if settings.ENVIRONMENT == "development" else None,
 )
 
 
@@ -155,6 +158,8 @@ app.include_router(attachments_router, prefix=settings.API_PREFIX)
 app.include_router(departments_router, prefix=settings.API_PREFIX)
 app.include_router(categories_router, prefix=settings.API_PREFIX)
 app.include_router(subcategories_router, prefix=settings.API_PREFIX)
+app.include_router(reports_router, prefix=settings.API_PREFIX)
+app.include_router(notifications_router, prefix=settings.API_PREFIX)
 
 # Create Upload Directory
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)

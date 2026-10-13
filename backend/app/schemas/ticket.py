@@ -30,15 +30,7 @@ class TicketCreate(BaseModel):
 
 
 class TicketAssign(BaseModel):
-    assigned_to_user_id: Optional[str] = None
-    assignee_id: Optional[str] = None
-
-    @property
-    def target_assignee_id(self) -> str:
-        target = self.assigned_to_user_id or self.assignee_id
-        if not target or not target.strip():
-            raise ValueError("assigned_to_user_id or assignee_id is required")
-        return target.strip()
+    assignee_id: str
 
 
 class TicketStatusUpdate(BaseModel):
@@ -59,11 +51,14 @@ class TicketRead(BaseModel):
     category_id: str
     subcategory_id: Optional[str] = None
     assigned_to: Optional[str] = None
-    assigned_to_user_id: Optional[str] = None
-    priority: TicketPriority
+    priority: TicketPriority = TicketPriority.MEDIUM
     status: TicketStatus
+    response_due_at: Optional[datetime] = None
+    resolution_due_at: Optional[datetime] = None
+    first_responded_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    sla_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

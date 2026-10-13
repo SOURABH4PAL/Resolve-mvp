@@ -47,10 +47,43 @@ export const CreateTicketPage: React.FC = () => {
     }
   };
 
+  const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.txt', '.docx', '.xlsx', '.csv', '.doc'];
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
-      setSelectedFiles(prev => [...prev, ...newFiles]);
+      const incoming = Array.from(e.target.files);
+      const validFiles: File[] = [];
+      const errorMsgs: string[] = [];
+
+      for (const f of incoming) {
+        const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+          errorMsgs.push(`"${f.name}" has an unsupported format. Supported: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV.`);
+          continue;
+        }
+        if (f.size > MAX_FILE_SIZE_BYTES) {
+          errorMsgs.push(`"${f.name}" exceeds the 10MB limit (${(f.size / (1024 * 1024)).toFixed(1)}MB).`);
+          continue;
+        }
+        if (f.size === 0) {
+          errorMsgs.push(`"${f.name}" is an empty file.`);
+          continue;
+        }
+        validFiles.push(f);
+      }
+
+      if (errorMsgs.length > 0) {
+        setServerError(errorMsgs.join(' '));
+      } else {
+        setServerError(null);
+      }
+
+      if (validFiles.length > 0) {
+        setSelectedFiles(prev => [...prev, ...validFiles]);
+      }
+      // Reset input value to allow selecting same file again if removed
+      e.target.value = '';
     }
   };
 
@@ -272,8 +305,8 @@ export const CreateTicketPage: React.FC = () => {
                   <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-slate-800)' }}>
                     Drop files here or click to browse
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)', marginTop: 4 }}>
-                    Max upload size: 10MB (Stored via FastAPI `POST /api/tickets/{'{ticket_id}'}/attachments`)
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 4 }}>
+                    Supported formats: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV (Max 10MB per file)
                   </div>
                 </div>
 
@@ -359,9 +392,9 @@ export const CreateTicketPage: React.FC = () => {
                 </p>
               </div>
               <div style={{ paddingTop: 10, borderTop: '1px solid var(--color-slate-100)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Backend API:</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Ticket Tracking:</span>
                 <p style={{ marginTop: 4, lineHeight: 1.4, color: 'var(--color-slate-500)' }}>
-                  Submissions create real tickets via <code>POST /api/tickets</code> and generate official sequential ticket IDs.
+                  Submissions generate an official ticket number and are automatically routed to the responsible department.
                 </p>
               </div>
             </div>

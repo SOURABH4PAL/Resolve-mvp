@@ -14,6 +14,13 @@ class SubcategoryCreate(SubcategoryBase):
     pass
 
 
+class SubcategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    category_id: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class SubcategoryRead(SubcategoryBase):
     id: str
     created_at: datetime

@@ -20,11 +20,35 @@ export const AdminEmployeeManagementPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const pageSize = 10;
 
   // Edit Responsibility Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [targetEmployee, setTargetEmployee] = useState<User | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+
+  const handleSearchChange = (term: string) => {
+    setSearchTerm(term);
+    setCurrentPage(1);
+  };
+
+  const handleDeptChange = (dept: string) => {
+    setSelectedDept(dept);
+    setCurrentPage(1);
+  };
+
+  const handleSort = (key: string) => {
+    if (sortBy === key) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   const filteredEmployees = employees.filter(emp => {
     if (searchTerm) {
@@ -41,6 +65,29 @@ export const AdminEmployeeManagementPage: React.FC = () => {
 
     return true;
   });
+
+  const sortedEmployees = [...filteredEmployees].sort((a, b) => {
+    let valA = '';
+    let valB = '';
+    if (sortBy === 'employee_id') {
+      valA = a.employee_id || '';
+      valB = b.employee_id || '';
+    } else if (sortBy === 'department') {
+      valA = a.department?.name || '';
+      valB = b.department?.name || '';
+    } else {
+      valA = a.name || '';
+      valB = b.name || '';
+    }
+    const cmp = valA.localeCompare(valB);
+    return sortOrder === 'asc' ? cmp : -cmp;
+  });
+
+  const totalPages = Math.ceil(sortedEmployees.length / pageSize) || 1;
+  const paginatedEmployees = sortedEmployees.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const handleOpenAssignModal = (emp: User) => {
     setTargetEmployee(emp);
@@ -81,6 +128,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       key: 'employee_id',
       header: 'Employee ID',
       width: '130px',
+      sortable: true,
       render: emp => (
         <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-primary-600)' }}>
           {emp.employee_id}
@@ -90,6 +138,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     {
       key: 'name',
       header: 'Employee & Email',
+      sortable: true,
       render: emp => (
         <div>
           <div style={{ fontWeight: 600, color: 'var(--color-slate-900)' }}>{emp.name}</div>
@@ -101,6 +150,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       key: 'department',
       header: 'Department',
       width: '180px',
+      sortable: true,
       render: emp => (
         <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)' }}>
           {emp.department?.name || 'Operations'}
@@ -257,7 +307,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
               type="text"
               placeholder="Search by employee name, email, or ID..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               style={{
                 width: '100%',
                 padding: '9px 12px 9px 36px',
@@ -271,7 +321,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
 
           <select
             value={selectedDept}
-            onChange={e => setSelectedDept(e.target.value)}
+            onChange={e => handleDeptChange(e.target.value)}
             style={{
               padding: '9px 14px',
               borderRadius: 6,
@@ -285,6 +335,20 @@ export const AdminEmployeeManagementPage: React.FC = () => {
             <option value="Human Resources">Human Resources</option>
             <option value="Finance & Payroll">Finance & Payroll</option>
           </select>
+
+          {(searchTerm || selectedDept !== 'ALL') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedDept('ALL');
+                setCurrentPage(1);
+              }}
+            >
+              Clear Filters
+            </Button>
+          )}
         </div>
       </div>
 
@@ -292,19 +356,19 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       <div className="card">
         <Table<User>
           columns={columns}
-          data={filteredEmployees}
+          data={paginatedEmployees}
           emptyMessage="No employees found matching filter."
-        />
-        <div
-          style={{
-            padding: '14px 20px',
-            borderTop: '1px solid var(--color-slate-100)',
-            fontSize: '0.825rem',
-            color: 'var(--color-slate-500)',
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+          pagination={{
+            currentPage,
+            totalPages,
+            totalRecords: sortedEmployees.length,
+            pageSize,
+            onPageChange: setCurrentPage,
           }}
-        >
-          Showing {filteredEmployees.length} of {employees.length} employees
-        </div>
+        />
       </div>
 
       {/* Assign Category Responsibility Modal */}

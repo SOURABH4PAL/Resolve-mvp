@@ -73,6 +73,10 @@ def seed_database():
 
         db.commit()
 
+        # Seed expanded IT taxonomy
+        from app.utils.seed_data import seed_it_taxonomies
+        seed_it_taxonomies(db, department_name="IT Support")
+
         # Safely migrate any existing legacy RESOLVER roles in DB to EMPLOYEE
         try:
             from sqlalchemy import text
