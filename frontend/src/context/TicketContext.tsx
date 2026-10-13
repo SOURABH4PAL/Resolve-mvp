@@ -79,31 +79,21 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!isAuthenticated) return;
     setIsLoadingMasterData(true);
     try {
-      const [deptList, catList, subList] = await Promise.all([
+      const [deptList, catList, subList, empList] = await Promise.all([
         api.get<Department[]>('/departments').catch(() => [] as Department[]),
         api.get<Category[]>('/categories').catch(() => [] as Category[]),
         api.get<Subcategory[]>('/subcategories').catch(() => [] as Subcategory[]),
+        api.get<User[]>('/users').catch(() => [] as User[]),
       ]);
 
       setDepartments(deptList || []);
       setCategories(catList || []);
       setSubcategories(subList || []);
 
-      // Connect to GET /api/users to load employee list
-      try {
-        const userList = await api.get<User[]>('/users');
-        if (Array.isArray(userList)) {
-          setEmployees(userList);
-        }
-      } catch (userErr: unknown) {
-        // GET /api/users may not be implemented in the current backend
-        // Maintain fallback list with currentUser if available
-        if (currentUser) {
-          setEmployees(prev => {
-            if (prev.length === 0) return [currentUser];
-            return prev;
-          });
-        }
+      if (empList && empList.length > 0) {
+        setEmployees(empList);
+      } else if (currentUser) {
+        setEmployees(prev => (prev.length === 0 ? [currentUser] : prev));
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch master data';

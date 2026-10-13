@@ -87,6 +87,10 @@ def seed_database():
 
         db.commit()
 
+        # Seed expanded IT taxonomy
+        from app.utils.seed_data import seed_it_taxonomies
+        seed_it_taxonomies(db, department_name="IT Support")
+
         # 4. Users (Including Department Leads & Normal Employees with Dailoqa company domains)
         users_to_create = [
             {

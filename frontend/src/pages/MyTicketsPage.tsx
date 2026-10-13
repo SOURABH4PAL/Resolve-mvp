@@ -26,6 +26,42 @@ export const MyTicketsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const pageSize = 10;
+
+  const handleSearchChange = (term: string) => {
+    setSearchTerm(term);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (st: string) => {
+    setStatusFilter(st);
+    setCurrentPage(1);
+  };
+
+  const handlePriorityChange = (pr: string) => {
+    setPriorityFilter(pr);
+    setCurrentPage(1);
+  };
+
+  const handleSort = (key: string) => {
+    if (sortBy === key) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortOrder(key === 'created_at' || key === 'updated_at' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setPriorityFilter('ALL');
+    setCurrentPage(1);
+  };
 
   // Filter by current user
   const myTickets = tickets.filter(t => t.created_by === currentUser?.id);
@@ -44,11 +80,44 @@ export const MyTicketsPage: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
+  const priorityWeight: Record<string, number> = {
+    CRITICAL: 4,
+    HIGH: 3,
+    MEDIUM: 2,
+    LOW: 1,
+  };
+
+  const sortedTickets = [...filteredTickets].sort((a, b) => {
+    let comparison = 0;
+    if (sortBy === 'ticket_number') {
+      comparison = a.ticket_number.localeCompare(b.ticket_number);
+    } else if (sortBy === 'title') {
+      comparison = a.title.localeCompare(b.title);
+    } else if (sortBy === 'priority') {
+      comparison = (priorityWeight[a.priority] || 0) - (priorityWeight[b.priority] || 0);
+    } else if (sortBy === 'status') {
+      comparison = a.status.localeCompare(b.status);
+    } else if (sortBy === 'updated_at') {
+      comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+    } else {
+      // created_at or default
+      comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  const totalPages = Math.ceil(sortedTickets.length / pageSize) || 1;
+  const paginatedTickets = sortedTickets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   const columns: Column<Ticket>[] = [
     {
       key: 'ticket_number',
       header: 'Ticket ID',
       width: '120px',
+      sortable: true,
       render: ticket => (
         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-primary-600)' }}>
           {ticket.ticket_number}
@@ -58,6 +127,7 @@ export const MyTicketsPage: React.FC = () => {
     {
       key: 'title',
       header: 'Title & Department',
+      sortable: true,
       render: ticket => {
         const deptName = ticket.category?.department?.name || 'Department';
         const catName = ticket.category?.name || 'General';
@@ -75,12 +145,14 @@ export const MyTicketsPage: React.FC = () => {
       key: 'priority',
       header: 'Priority',
       width: '120px',
+      sortable: true,
       render: ticket => <PriorityBadge priority={ticket.priority} />,
     },
     {
       key: 'status',
       header: 'Status',
       width: '140px',
+      sortable: true,
       render: ticket => <StatusBadge status={ticket.status} />,
     },
     {
@@ -100,6 +172,7 @@ export const MyTicketsPage: React.FC = () => {
       key: 'updated_at',
       header: 'Last Updated',
       width: '130px',
+      sortable: true,
       render: ticket => (
         <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
           {new Date(ticket.updated_at).toLocaleDateString('en-US', {
@@ -186,7 +259,7 @@ export const MyTicketsPage: React.FC = () => {
               type="text"
               placeholder="Search by ticket ID, subject, keyword..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="form-input"
               style={{ paddingLeft: 38 }}
             />
@@ -197,7 +270,7 @@ export const MyTicketsPage: React.FC = () => {
             className="form-select"
             style={{ width: 160 }}
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={e => handleStatusChange(e.target.value)}
           >
             <option value="ALL">All Statuses</option>
             <option value="OPEN">Open</option>
@@ -214,7 +287,7 @@ export const MyTicketsPage: React.FC = () => {
             className="form-select"
             style={{ width: 140 }}
             value={priorityFilter}
-            onChange={e => setPriorityFilter(e.target.value)}
+            onChange={e => handlePriorityChange(e.target.value)}
           >
             <option value="ALL">All Priorities</option>
             <option value="LOW">Low</option>
@@ -222,6 +295,12 @@ export const MyTicketsPage: React.FC = () => {
             <option value="HIGH">High</option>
             <option value="CRITICAL">Critical</option>
           </select>
+
+          {(searchTerm || statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+            <Button variant="secondary" size="sm" onClick={handleClearFilters}>
+              Clear Filters
+            </Button>
+          )}
         </div>
 
         {/* View Switcher (Table vs Card) */}
@@ -295,15 +374,50 @@ export const MyTicketsPage: React.FC = () => {
       ) : viewMode === 'table' ? (
         <Table
           columns={columns}
-          data={filteredTickets}
+          data={paginatedTickets}
           keyExtractor={t => t.id}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+          pagination={{
+            currentPage,
+            totalPages,
+            totalRecords: sortedTickets.length,
+            pageSize,
+            onPageChange: setCurrentPage,
+          }}
           onRowClick={t => navigate(`/tickets/${t.id}`)}
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
-          {filteredTickets.map(ticket => (
-            <TicketCard key={ticket.id} ticket={ticket} />
-          ))}
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+            {paginatedTickets.map(ticket => (
+              <TicketCard key={ticket.id} ticket={ticket} />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-600)' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

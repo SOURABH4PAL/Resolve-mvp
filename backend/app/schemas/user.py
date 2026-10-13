@@ -17,6 +17,10 @@ class UserCreate(UserBase):
     password: str
 
 
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
+
 class UserRead(UserBase):
     id: str
     created_at: datetime

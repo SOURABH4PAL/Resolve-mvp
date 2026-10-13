@@ -180,19 +180,52 @@ export const TicketDetailsPage: React.FC = () => {
     }
   };
 
+  const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.txt', '.docx', '.xlsx', '.csv', '.doc'];
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setIsUploading(true);
-      try {
-        const newAtt = await uploadAttachment(ticket.id, file);
-        setAttachments(prev => [...prev, newAtt]);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'File upload failed. Ensure size is within 10MB limit.';
-        alert(msg);
-      } finally {
-        setIsUploading(false);
+      const incoming = Array.from(e.target.files);
+      const validFiles: File[] = [];
+      const errorMsgs: string[] = [];
+
+      for (const f of incoming) {
+        const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+          errorMsgs.push(`"${f.name}" has an unsupported format. Supported: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV.`);
+          continue;
+        }
+        if (f.size > MAX_FILE_SIZE_BYTES) {
+          errorMsgs.push(`"${f.name}" exceeds the 10MB limit.`);
+          continue;
+        }
+        if (f.size === 0) {
+          errorMsgs.push(`"${f.name}" is an empty file.`);
+          continue;
+        }
+        validFiles.push(f);
       }
+
+      if (errorMsgs.length > 0) {
+        alert(errorMsgs.join('\n'));
+      }
+
+      if (validFiles.length > 0) {
+        setIsUploading(true);
+        try {
+          for (const f of validFiles) {
+            const newAtt = await uploadAttachment(ticket.id, f);
+            setAttachments(prev => [...prev, newAtt]);
+          }
+        } catch (err: unknown) {
+          console.error('Failed to upload file(s):', err);
+          const msg = err instanceof Error ? err.message : 'File upload failed.';
+          alert(`File upload failed: ${msg}`);
+        } finally {
+          setIsUploading(false);
+        }
+      }
+      e.target.value = '';
     }
   };
 
@@ -449,20 +482,26 @@ export const TicketDetailsPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Add attachment button */}
-              <label
-                className="btn btn-secondary btn-sm"
-                style={{ cursor: isUploading ? 'not-allowed' : 'pointer', margin: 0 }}
-              >
-                <UploadCloud size={14} />
-                {isUploading ? 'Uploading...' : 'Attach File'}
-                <input
-                  type="file"
-                  disabled={isUploading}
-                  style={{ display: 'none' }}
-                  onChange={handleFileUpload}
-                />
-              </label>
+              {/* Add attachment button with multiple file support */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '0.725rem', color: 'var(--color-slate-400)' }}>
+                  PDF, PNG, JPG, TXT, DOCX, XLSX (Max 10MB)
+                </span>
+                <label
+                  className="btn btn-secondary btn-sm"
+                  style={{ cursor: isUploading ? 'not-allowed' : 'pointer', margin: 0 }}
+                >
+                  <UploadCloud size={14} />
+                  {isUploading ? 'Uploading...' : 'Attach File(s)'}
+                  <input
+                    type="file"
+                    multiple
+                    disabled={isUploading}
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="card-body">

@@ -13,6 +13,12 @@ class DepartmentCreate(DepartmentBase):
     pass
 
 
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    department_email: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class DepartmentRead(DepartmentBase):
     id: str
     created_at: datetime

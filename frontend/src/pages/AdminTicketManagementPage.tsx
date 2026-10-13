@@ -25,9 +25,15 @@ export const AdminTicketManagementPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedPriority, setSelectedPriority] = useState('ALL');
+  const [selectedAssignee, setSelectedAssignee] = useState('ALL');
   const [assignmentFilter, setAssignmentFilter] = useState<'ALL' | 'ASSIGNED' | 'UNASSIGNED'>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const pageSize = 10;
 
   // Reassignment Modal State
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
@@ -36,20 +42,82 @@ export const AdminTicketManagementPage: React.FC = () => {
   const [isAssigning, setIsAssigning] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
 
+  const handleSearchChange = (term: string) => {
+    setSearchTerm(term);
+    setCurrentPage(1);
+  };
+
+  const handleDeptChange = (dept: string) => {
+    setSelectedDept(dept);
+    setSelectedCategory('ALL');
+    setCurrentPage(1);
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (st: string) => {
+    setSelectedStatus(st);
+    setCurrentPage(1);
+  };
+
+  const handlePriorityChange = (pr: string) => {
+    setSelectedPriority(pr);
+    setCurrentPage(1);
+  };
+
+  const handleAssignmentFilterChange = (af: 'ALL' | 'ASSIGNED' | 'UNASSIGNED') => {
+    setAssignmentFilter(af);
+    setCurrentPage(1);
+  };
+
+  const handleAssigneeChange = (assigneeId: string) => {
+    setSelectedAssignee(assigneeId);
+    setCurrentPage(1);
+  };
+
+  const handleSort = (key: string) => {
+    if (sortBy === key) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortOrder(key === 'created_at' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedDept('ALL');
+    setSelectedCategory('ALL');
+    setSelectedStatus('ALL');
+    setSelectedPriority('ALL');
+    setSelectedAssignee('ALL');
+    setAssignmentFilter('ALL');
+    setCurrentPage(1);
+  };
+
   // Filtered tickets
   const filteredTickets = tickets.filter(ticket => {
     if (searchTerm) {
       const matchNum = ticket.ticket_number.toLowerCase().includes(searchTerm.toLowerCase());
       const matchTitle = ticket.title.toLowerCase().includes(searchTerm.toLowerCase());
       const matchDesc = ticket.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchAssignee = ticket.assignee?.name.toLowerCase().includes(searchTerm.toLowerCase());
-      if (!matchNum && !matchTitle && !matchDesc && !matchAssignee) return false;
+      const matchAssignee = (ticket.assignee?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCat = (ticket.category?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      if (!matchNum && !matchTitle && !matchDesc && !matchAssignee && !matchCat) return false;
     }
 
     if (selectedDept !== 'ALL') {
       const deptName = ticket.category?.department?.name;
       const deptId = ticket.category?.department_id;
       if (deptName !== selectedDept && deptId !== selectedDept) return false;
+    }
+
+    if (selectedCategory !== 'ALL') {
+      if (ticket.category_id !== selectedCategory && ticket.category?.name !== selectedCategory) return false;
     }
 
     if (selectedStatus !== 'ALL' && ticket.status !== selectedStatus) {
@@ -63,8 +131,48 @@ export const AdminTicketManagementPage: React.FC = () => {
     if (assignmentFilter === 'ASSIGNED' && !ticket.assigned_to) return false;
     if (assignmentFilter === 'UNASSIGNED' && ticket.assigned_to) return false;
 
+    if (selectedAssignee !== 'ALL') {
+      if (ticket.assigned_to !== selectedAssignee && ticket.assignee?.id !== selectedAssignee) return false;
+    }
+
     return true;
   });
+
+  const priorityWeight: Record<string, number> = {
+    CRITICAL: 4,
+    HIGH: 3,
+    MEDIUM: 2,
+    LOW: 1,
+  };
+
+  const sortedTickets = [...filteredTickets].sort((a, b) => {
+    let comparison = 0;
+    if (sortBy === 'ticket_number') {
+      comparison = a.ticket_number.localeCompare(b.ticket_number);
+    } else if (sortBy === 'title') {
+      comparison = a.title.localeCompare(b.title);
+    } else if (sortBy === 'priority') {
+      comparison = (priorityWeight[a.priority] || 0) - (priorityWeight[b.priority] || 0);
+    } else if (sortBy === 'status') {
+      comparison = a.status.localeCompare(b.status);
+    } else if (sortBy === 'assigned_to') {
+      const nameA = a.assignee?.name || '';
+      const nameB = b.assignee?.name || '';
+      comparison = nameA.localeCompare(nameB);
+    } else {
+      // created_at or default
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      comparison = dateA - dateB;
+    }
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  const totalPages = Math.ceil(sortedTickets.length / pageSize) || 1;
+  const paginatedTickets = sortedTickets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const handleOpenReassignModal = (ticket: Ticket, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -96,6 +204,7 @@ export const AdminTicketManagementPage: React.FC = () => {
       key: 'ticket_number',
       header: 'Ticket ID',
       width: '120px',
+      sortable: true,
       render: ticket => (
         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-primary-600)' }}>
           {ticket.ticket_number}
@@ -105,6 +214,7 @@ export const AdminTicketManagementPage: React.FC = () => {
     {
       key: 'title',
       header: 'Issue Details',
+      sortable: true,
       render: ticket => {
         const dept = ticket.category?.department?.name || 'Department';
         const cat = ticket.category?.name || 'Category';
@@ -122,18 +232,21 @@ export const AdminTicketManagementPage: React.FC = () => {
       key: 'priority',
       header: 'Priority',
       width: '110px',
+      sortable: true,
       render: ticket => <PriorityBadge priority={ticket.priority} />,
     },
     {
       key: 'status',
       header: 'Status',
       width: '130px',
+      sortable: true,
       render: ticket => <StatusBadge status={ticket.status} />,
     },
     {
       key: 'assigned_to',
       header: 'Assigned Employee',
       width: '180px',
+      sortable: true,
       render: ticket => {
         const name = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Unassigned');
         const isUnassigned = !ticket.assigned_to;
@@ -233,7 +346,7 @@ export const AdminTicketManagementPage: React.FC = () => {
                 type="text"
                 placeholder="Search ticket #, title, or keywords..."
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={e => handleSearchChange(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px 9px 36px',
@@ -249,7 +362,7 @@ export const AdminTicketManagementPage: React.FC = () => {
           {/* Department Filter */}
           <select
             value={selectedDept}
-            onChange={e => setSelectedDept(e.target.value)}
+            onChange={e => handleDeptChange(e.target.value)}
             style={{
               padding: '9px 12px',
               borderRadius: 6,
@@ -266,10 +379,36 @@ export const AdminTicketManagementPage: React.FC = () => {
             ))}
           </select>
 
+          {/* Category Filter */}
+          <select
+            value={selectedCategory}
+            onChange={e => handleCategoryChange(e.target.value)}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--color-slate-200)',
+              fontSize: '0.85rem',
+              backgroundColor: '#ffffff',
+            }}
+          >
+            <option value="ALL">All Categories</option>
+            {categories
+              .filter(c => {
+                if (selectedDept === 'ALL') return true;
+                const dept = departments.find(d => d.id === c.department_id) || c.department;
+                return dept?.name === selectedDept || c.department_id === selectedDept;
+              })
+              .map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+
           {/* Status Filter */}
           <select
             value={selectedStatus}
-            onChange={e => setSelectedStatus(e.target.value)}
+            onChange={e => handleStatusChange(e.target.value)}
             style={{
               padding: '9px 12px',
               borderRadius: 6,
@@ -291,7 +430,7 @@ export const AdminTicketManagementPage: React.FC = () => {
           {/* Priority Filter */}
           <select
             value={selectedPriority}
-            onChange={e => setSelectedPriority(e.target.value)}
+            onChange={e => handlePriorityChange(e.target.value)}
             style={{
               padding: '9px 12px',
               borderRadius: 6,
@@ -310,7 +449,7 @@ export const AdminTicketManagementPage: React.FC = () => {
           {/* Assignment Filter */}
           <select
             value={assignmentFilter}
-            onChange={e => setAssignmentFilter(e.target.value as any)}
+            onChange={e => handleAssignmentFilterChange(e.target.value as any)}
             style={{
               padding: '9px 12px',
               borderRadius: 6,
@@ -323,6 +462,41 @@ export const AdminTicketManagementPage: React.FC = () => {
             <option value="ASSIGNED">Assigned Only</option>
             <option value="UNASSIGNED">Unassigned Only</option>
           </select>
+
+          {/* Assigned Employee Filter */}
+          <select
+            value={selectedAssignee}
+            onChange={e => handleAssigneeChange(e.target.value)}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--color-slate-200)',
+              fontSize: '0.85rem',
+              backgroundColor: '#ffffff',
+            }}
+          >
+            <option value="ALL">All Assignees</option>
+            {employees.map(emp => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Clear Filters Button */}
+          {(searchTerm ||
+            selectedDept !== 'ALL' ||
+            selectedCategory !== 'ALL' ||
+            selectedStatus !== 'ALL' ||
+            selectedPriority !== 'ALL' ||
+            assignmentFilter !== 'ALL' ||
+            selectedAssignee !== 'ALL') && (
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Button variant="secondary" size="sm" onClick={handleClearFilters}>
+                Clear Filters
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -330,14 +504,21 @@ export const AdminTicketManagementPage: React.FC = () => {
       <div className="card">
         <Table<Ticket>
           columns={columns}
-          data={filteredTickets}
+          data={paginatedTickets}
           isLoading={isLoadingTickets}
           emptyMessage="No tickets found matching current filters."
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+          pagination={{
+            currentPage,
+            totalPages,
+            totalRecords: sortedTickets.length,
+            pageSize,
+            onPageChange: setCurrentPage,
+          }}
           onRowClick={ticket => navigate(`/tickets/${ticket.ticket_number}`)}
         />
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--color-slate-100)', fontSize: '0.825rem', color: 'var(--color-slate-500)' }}>
-          Showing {filteredTickets.length} of {tickets.length} total company tickets
-        </div>
       </div>
 
       {/* Reassign Ticket Modal */}

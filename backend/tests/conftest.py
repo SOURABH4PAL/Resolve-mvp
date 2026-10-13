@@ -121,10 +121,10 @@ def auth_headers(user: User) -> dict:
 
 
 def make_ticket(db, creator: User, category_id: str, subcategory_id=None,
-                status=TicketStatus.OPEN, assigned_to=None):
+                status=TicketStatus.OPEN, assigned_to=None, ticket_number=None):
     from app.utils.ticket_number import generate_ticket_number
     ticket = Ticket(
-        ticket_number=generate_ticket_number(db),
+        ticket_number=ticket_number or generate_ticket_number(db),
         title="Test Ticket",
         description="A test ticket description",
         created_by=creator.id,

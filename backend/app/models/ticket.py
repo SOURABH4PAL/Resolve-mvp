@@ -54,10 +54,19 @@ class Ticket(Base):
     attachments = relationship("TicketAttachment", back_populates="ticket", cascade="all, delete-orphan")
 
     @property
-    def assigned_to_user_id(self):
-        return self.assigned_to
-
-    @assigned_to_user_id.setter
-    def assigned_to_user_id(self, value):
-        self.assigned_to = value
-
+    def sla_status(self) -> str:
+        now = datetime.utcnow()
+        if self.status in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+            if self.resolved_at and self.resolution_due_at:
+                return "IN_SLA" if self.resolved_at <= self.resolution_due_at else "BREACHED"
+            return "IN_SLA"
+        if self.resolution_due_at and now > self.resolution_due_at:
+            return "BREACHED"
+        if self.response_due_at and self.first_responded_at is None and now > self.response_due_at:
+            return "BREACHED"
+        if self.resolution_due_at and self.created_at:
+            total_duration = (self.resolution_due_at - self.created_at).total_seconds()
+            remaining = (self.resolution_due_at - now).total_seconds()
+            if total_duration > 0 and remaining <= 0.25 * total_duration:
+                return "AT_RISK"
+        return "IN_SLA"

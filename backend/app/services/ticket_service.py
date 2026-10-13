@@ -1,6 +1,8 @@
+import math
 import os
-from datetime import datetime
-from typing import List, Optional
+import uuid
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, UploadFile
 
@@ -8,6 +10,7 @@ from app.models.user import User, UserRole
 from app.models.ticket import Ticket, TicketStatus, TicketPriority
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_attachment import TicketAttachment
+from app.models.notification import Notification
 from app.models.category import Category
 from app.models.subcategory import Subcategory
 from app.models.department import Department
@@ -19,6 +22,40 @@ from app.services import notification_service
 
 settings = get_settings()
 
+SLA_TARGETS = {
+    TicketPriority.CRITICAL: {"response_hours": 1, "resolution_hours": 4},
+    TicketPriority.HIGH: {"response_hours": 2, "resolution_hours": 8},
+    TicketPriority.MEDIUM: {"response_hours": 4, "resolution_hours": 24},
+    TicketPriority.LOW: {"response_hours": 8, "resolution_hours": 48},
+}
+
+
+def _send_notification(
+    db: Session,
+    user_id: str,
+    title: str,
+    message: str,
+    ticket_id: Optional[str] = None,
+) -> None:
+    """Create an in-app notification for a user."""
+    notif = Notification(
+        user_id=user_id,
+        ticket_id=ticket_id,
+        title=title,
+        message=message,
+        is_read=False,
+    )
+    db.add(notif)
+
+TICKET_SORT_FIELDS = {
+    "created_at": Ticket.created_at,
+    "updated_at": Ticket.updated_at,
+    "priority": Ticket.priority,
+    "status": Ticket.status,
+    "title": Ticket.title,
+    "ticket_number": Ticket.ticket_number,
+}
+
 # ---------------------------------------------------------------------------
 # Valid lifecycle transitions
 # Each key is the CURRENT status; value is the set of ALLOWED next statuses.
@@ -28,8 +65,7 @@ VALID_TRANSITIONS: dict[TicketStatus, set[TicketStatus]] = {
     TicketStatus.ASSIGNED: {TicketStatus.IN_PROGRESS, TicketStatus.CLOSED},
     TicketStatus.IN_PROGRESS: {TicketStatus.WAITING_FOR_USER, TicketStatus.RESOLVED, TicketStatus.CLOSED},
     TicketStatus.WAITING_FOR_USER: {TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED, TicketStatus.CLOSED},
-    TicketStatus.RESOLVED: {TicketStatus.CLOSED, TicketStatus.IN_PROGRESS, TicketStatus.REOPENED},
-    TicketStatus.REOPENED: {TicketStatus.IN_PROGRESS, TicketStatus.WAITING_FOR_USER, TicketStatus.RESOLVED, TicketStatus.CLOSED},
+    TicketStatus.RESOLVED: {TicketStatus.CLOSED, TicketStatus.IN_PROGRESS},   # admin can reopen; creator closes
     TicketStatus.CLOSED: set(),   # terminal — no further transitions
 }
 
@@ -105,6 +141,12 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
             assigned_to_id = assignee.id
             initial_status = TicketStatus.ASSIGNED
 
+    now = datetime.utcnow()
+    prio = ticket_in.priority if ticket_in.priority else TicketPriority.MEDIUM
+    sla = SLA_TARGETS.get(prio, SLA_TARGETS[TicketPriority.MEDIUM])
+    resp_due = now + timedelta(hours=sla["response_hours"])
+    res_due = now + timedelta(hours=sla["resolution_hours"])
+
     ticket = Ticket(
         ticket_number=ticket_num,
         title=ticket_in.title,
@@ -113,8 +155,10 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
         category_id=ticket_in.category_id,
         subcategory_id=ticket_in.subcategory_id,
         assigned_to=assigned_to_id,
-        priority=ticket_in.priority,
+        priority=prio,
         status=initial_status,
+        response_due_at=resp_due,
+        resolution_due_at=res_due,
     )
     db.add(ticket)
     db.commit()
@@ -135,26 +179,121 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
             )
         except Exception:
             pass
+        _send_notification(
+            db,
+            user_id=assignee.id,
+            title=f"Ticket Assigned: {ticket.ticket_number}",
+            message=f"You have been assigned ticket '{ticket.title}'.",
+            ticket_id=ticket.id,
+        )
 
+    # In-app notification to all active super admins
+    admins = db.query(User).filter(User.role == UserRole.SUPER_ADMIN, User.is_active == True).all()
+    for admin in admins:
+        _send_notification(
+            db,
+            user_id=admin.id,
+            title=f"New Ticket Created: {ticket.ticket_number}",
+            message=f"Ticket '{ticket.title}' was created by {current_user.name}.",
+            ticket_id=ticket.id,
+        )
+    db.commit()
     return ticket
 
 
-def get_user_tickets(db: Session, current_user: User) -> List[Ticket]:
-    """Retrieve tickets accessible to the user:
+def get_user_tickets(
+    db: Session,
+    current_user: User,
+    search: Optional[str] = None,
+    priority: Optional[TicketPriority] = None,
+    status_filter: Optional[TicketStatus] = None,
+    department_id: Optional[str] = None,
+    category_id: Optional[str] = None,
+    subcategory_id: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    created_by: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+) -> Tuple[List[Ticket], int, int, int]:
+    """Retrieve tickets accessible to the user, with search, filtering, sorting, and pagination:
     - EMPLOYEE: tickets created by self or assigned to self
     - SUPER_ADMIN: all tickets
+    Returns: (items, total_count, current_page, total_pages)
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-        return db.query(Ticket).order_by(Ticket.created_at.desc()).all()
-    return (
-        db.query(Ticket)
-        .filter(
+    query = db.query(Ticket)
+
+    # Permission check: EMPLOYEE only sees own or assigned tickets
+    if current_user.role != UserRole.SUPER_ADMIN:
+        query = query.filter(
             (Ticket.created_by == current_user.id)
             | (Ticket.assigned_to == current_user.id)
         )
-        .order_by(Ticket.created_at.desc())
-        .all()
-    )
+
+    # Search filter (title, ticket_number, description)
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(
+            (Ticket.ticket_number.ilike(search_term))
+            | (Ticket.title.ilike(search_term))
+            | (Ticket.description.ilike(search_term))
+        )
+
+    # Filtering
+    if priority:
+        query = query.filter(Ticket.priority == priority)
+    if status_filter:
+        query = query.filter(Ticket.status == status_filter)
+    if category_id:
+        query = query.filter(Ticket.category_id == category_id)
+    if subcategory_id:
+        query = query.filter(Ticket.subcategory_id == subcategory_id)
+    if assigned_to:
+        query = query.filter(Ticket.assigned_to == assigned_to)
+    if created_by:
+        query = query.filter(Ticket.created_by == created_by)
+    if department_id:
+        query = query.join(Ticket.category).filter(Category.department_id == department_id)
+
+    # Count total matching records before pagination
+    total = query.count()
+
+    # Sorting with allowlist validation
+    if sort_by:
+        normalized_sort = sort_by.strip().lower()
+        if normalized_sort not in TICKET_SORT_FIELDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid sort field '{sort_by}'. Allowed fields: {sorted(list(TICKET_SORT_FIELDS.keys()))}",
+            )
+        col = TICKET_SORT_FIELDS[normalized_sort]
+        norm_order = (sort_order or "desc").strip().lower()
+        if norm_order not in ("asc", "desc"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid sort order '{sort_order}'. Allowed values: ['asc', 'desc']",
+            )
+        if norm_order == "asc":
+            query = query.order_by(col.asc())
+        else:
+            query = query.order_by(col.desc())
+    else:
+        query = query.order_by(Ticket.created_at.desc())
+
+    # Pagination
+    if page is not None:
+        effective_page_size = page_size if page_size is not None else 10
+        total_pages = math.ceil(total / effective_page_size) if total > 0 else 0
+        offset = (page - 1) * effective_page_size
+        items = query.offset(offset).limit(effective_page_size).all()
+        return items, total, page, total_pages
+
+    # If page is not specified, return all items
+    items = query.all()
+    effective_page_size = len(items) if items else 10
+    total_pages = 1 if total > 0 else 0
+    return items, total, 1, total_pages
 
 
 def get_ticket_by_id(db: Session, ticket_id: str, current_user: User) -> Ticket:
@@ -196,17 +335,16 @@ def assign_ticket(db: Session, ticket_id: str, assign_in: TicketAssign, current_
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    try:
-        target_id = assign_in.target_assignee_id
-    except ValueError as e:
+    # Validate assignee exists and is active
+    target_id = assign_in.assignee_id or assign_in.assigned_to_user_id or assign_in.assigned_to
+    if not target_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
+            detail="Assignee ID is required",
         )
 
-    # Validate assignee exists, is active, and is an employee
     assignee = db.query(User).filter(
-        (User.id == target_id) | (User.employee_id == target_id),
+        User.id == target_id,
         User.is_active == True,
     ).first()
     if not assignee:
@@ -226,11 +364,22 @@ def assign_ticket(db: Session, ticket_id: str, assign_in: TicketAssign, current_
     if ticket.status == TicketStatus.OPEN:
         ticket.status = TicketStatus.ASSIGNED
 
+    if ticket.first_responded_at is None:
+        ticket.first_responded_at = datetime.utcnow()
+
     _add_system_comment(
         db,
         ticket.id,
         current_user.id,
         f"Ticket assigned to {assignee.name} ({assignee.employee_id}) by {current_user.name}.",
+    )
+
+    _send_notification(
+        db,
+        user_id=assignee.id,
+        title=f"Ticket Assigned: {ticket.ticket_number}",
+        message=f"You have been assigned ticket '{ticket.title}' by {current_user.name}.",
+        ticket_id=ticket.id,
     )
 
     db.commit()
@@ -255,24 +404,14 @@ def update_ticket_status(
     is_assigned = ticket.assigned_to == current_user.id
     is_creator = ticket.created_by == current_user.id
 
-    if new_status in {TicketStatus.IN_PROGRESS, TicketStatus.WAITING_FOR_USER, TicketStatus.ASSIGNED}:
-        if new_status == TicketStatus.IN_PROGRESS and ticket.status in {TicketStatus.RESOLVED, TicketStatus.REOPENED}:
-            if not is_admin and not is_creator and not is_assigned:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only the ticket creator, assigned employee, or SUPER_ADMIN can reopen a resolved ticket",
-                )
-        else:
-            if not is_admin and not is_assigned:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only the assigned employee or SUPER_ADMIN can change work-related statuses",
-                )
-    elif new_status == TicketStatus.REOPENED:
-        if not is_admin and not is_creator:
+    # Statuses that require admin OR assigned employee
+    work_statuses = {TicketStatus.IN_PROGRESS, TicketStatus.WAITING_FOR_USER, TicketStatus.ASSIGNED}
+
+    if new_status in work_statuses:
+        if not is_admin and not is_assigned:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the ticket creator or SUPER_ADMIN can reopen tickets",
+                detail="Only the assigned employee or SUPER_ADMIN can change work-related statuses",
             )
     elif new_status == TicketStatus.RESOLVED:
         if not is_admin and not is_assigned:
@@ -297,11 +436,30 @@ def update_ticket_status(
     # --- lifecycle validation ---
     _assert_transition_allowed(ticket.status, new_status)
 
+    if ticket.first_responded_at is None and current_user.id != ticket.created_by:
+        ticket.first_responded_at = datetime.utcnow()
+
     ticket.status = new_status
     if new_status == TicketStatus.RESOLVED:
         ticket.resolved_at = datetime.utcnow()
+        if ticket.created_by != current_user.id:
+            _send_notification(
+                db,
+                user_id=ticket.created_by,
+                title=f"Ticket Resolved: {ticket.ticket_number}",
+                message=f"Your ticket '{ticket.title}' has been marked as RESOLVED by {current_user.name}.",
+                ticket_id=ticket.id,
+            )
     elif new_status == TicketStatus.CLOSED:
         ticket.closed_at = datetime.utcnow()
+        if ticket.created_by != current_user.id:
+            _send_notification(
+                db,
+                user_id=ticket.created_by,
+                title=f"Ticket Closed: {ticket.ticket_number}",
+                message=f"Your ticket '{ticket.title}' has been marked as CLOSED.",
+                ticket_id=ticket.id,
+            )
 
     # Optional human comment
     if update_in.comment and update_in.comment.strip():
@@ -313,24 +471,6 @@ def update_ticket_status(
         )
 
     db.commit()
-    db.refresh(ticket)
-
-    try:
-        recipient_id = None
-        if current_user.id == ticket.assigned_to and ticket.created_by != current_user.id:
-            recipient_id = ticket.created_by
-        elif current_user.id == ticket.created_by and ticket.assigned_to:
-            recipient_id = ticket.assigned_to
-
-        if recipient_id:
-            recipient = db.query(User).filter(User.id == recipient_id).first()
-            if recipient:
-                notification_service.create_ticket_update_notification(
-                    db, ticket, actor=current_user, recipient=recipient, update_text=f"Status changed to {new_status.value}"
-                )
-    except Exception:
-        pass
-
     return ticket
 
 
@@ -349,11 +489,23 @@ def resolve_ticket(db: Session, ticket_id: str, resolve_in: TicketResolve, curre
 
     _assert_transition_allowed(ticket.status, TicketStatus.RESOLVED)
 
+    if ticket.first_responded_at is None and current_user.id != ticket.created_by:
+        ticket.first_responded_at = datetime.utcnow()
+
     ticket.status = TicketStatus.RESOLVED
     ticket.resolved_at = datetime.utcnow()
 
     resolution_text = resolve_in.resolution_notes or "Ticket has been marked as resolved."
     _add_system_comment(db, ticket.id, current_user.id, f"Resolution: {resolution_text}")
+
+    if ticket.created_by != current_user.id:
+        _send_notification(
+            db,
+            user_id=ticket.created_by,
+            title=f"Ticket Resolved: {ticket.ticket_number}",
+            message=f"Your ticket '{ticket.title}' has been resolved by {current_user.name}.",
+            ticket_id=ticket.id,
+        )
 
     db.commit()
     db.refresh(ticket)
@@ -386,6 +538,15 @@ def close_ticket(db: Session, ticket_id: str, current_user: User) -> Ticket:
 
     _add_system_comment(db, ticket.id, current_user.id, "Ticket closed.")
 
+    if ticket.created_by != current_user.id:
+        _send_notification(
+            db,
+            user_id=ticket.created_by,
+            title=f"Ticket Closed: {ticket.ticket_number}",
+            message=f"Your ticket '{ticket.title}' has been closed.",
+            ticket_id=ticket.id,
+        )
+
     db.commit()
     db.refresh(ticket)
     return ticket
@@ -410,6 +571,9 @@ def add_comment(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only assigned employees or admins can create internal notes",
         )
+
+    if ticket.first_responded_at is None and current_user.id != ticket.created_by:
+        ticket.first_responded_at = datetime.utcnow()
 
     comment = TicketComment(
         ticket_id=ticket.id,
@@ -455,9 +619,70 @@ def get_ticket_comments(
     return query.order_by(TicketComment.created_at.asc()).all()
 
 
+def delete_comment(
+    db: Session, ticket_id: str, comment_id: str, current_user: User
+) -> None:
+    """Delete a comment (SUPER_ADMIN or author only)."""
+    ticket = get_ticket_by_id(db, ticket_id, current_user)
+
+    comment = db.query(TicketComment).filter(
+        TicketComment.id == comment_id,
+        TicketComment.ticket_id == ticket.id,
+    ).first()
+    if not comment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+
+    is_admin = current_user.role == UserRole.SUPER_ADMIN
+    is_author = comment.user_id == current_user.id
+    if not is_admin and not is_author:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only comment author or SUPER_ADMIN can delete this comment",
+        )
+
+    db.delete(comment)
+    db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Attachments
 # ---------------------------------------------------------------------------
+
+def _validate_attachment_file(file: UploadFile, contents: bytes) -> tuple[str, int]:
+    """Validate file name, extension, and content size according to settings."""
+    if not file.filename or not file.filename.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename is required",
+        )
+
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    allowed = [ext.lower() for ext in settings.ALLOWED_EXTENSIONS]
+    if file_ext not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unsupported file type '{file_ext}'. "
+                f"Supported types: {', '.join(settings.ALLOWED_EXTENSIONS)}"
+            ),
+        )
+
+    file_size = len(contents)
+    if file_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot upload an empty file",
+        )
+
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if file_size > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds maximum allowed limit of {settings.MAX_UPLOAD_SIZE_MB}MB",
+        )
+
+    return file_ext, file_size
+
 
 async def add_attachment(
     db: Session, ticket_id: str, file: UploadFile, current_user: User
@@ -465,22 +690,14 @@ async def add_attachment(
     """Save file upload to an absolute path and record attachment metadata."""
     ticket = get_ticket_by_id(db, ticket_id, current_user)
 
-    # Always resolve to absolute path for safety
+    contents = await file.read()
+    file_ext, file_size = _validate_attachment_file(file, contents)
+
     upload_dir = os.path.abspath(settings.UPLOAD_DIR)
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_ext = os.path.splitext(file.filename or "")[1]
-    safe_filename = f"{ticket.id}_{int(datetime.utcnow().timestamp())}{file_ext}"
+    safe_filename = f"{ticket.id}_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}{file_ext}"
     file_path = os.path.join(upload_dir, safe_filename)
-
-    contents = await file.read()
-    file_size = len(contents)
-
-    if file_size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File size exceeds maximum allowed limit of {settings.MAX_UPLOAD_SIZE_MB}MB",
-        )
 
     with open(file_path, "wb") as f:
         f.write(contents)
@@ -497,6 +714,54 @@ async def add_attachment(
     db.commit()
     db.refresh(attachment)
     return attachment
+
+
+async def add_multiple_attachments(
+    db: Session, ticket_id: str, files: List[UploadFile], current_user: User
+) -> List[TicketAttachment]:
+    """Validate and upload multiple files to a ticket in a single operation."""
+    ticket = get_ticket_by_id(db, ticket_id, current_user)
+
+    if not files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one file must be provided for upload",
+        )
+
+    # Pre-read and validate all files before writing to disk
+    validated: List[tuple[UploadFile, bytes, str, int]] = []
+    for f in files:
+        contents = await f.read()
+        file_ext, file_size = _validate_attachment_file(f, contents)
+        validated.append((f, contents, file_ext, file_size))
+
+    upload_dir = os.path.abspath(settings.UPLOAD_DIR)
+    os.makedirs(upload_dir, exist_ok=True)
+
+    created_attachments: List[TicketAttachment] = []
+    for f, contents, file_ext, file_size in validated:
+        safe_filename = f"{ticket.id}_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}{file_ext}"
+        file_path = os.path.join(upload_dir, safe_filename)
+
+        with open(file_path, "wb") as out:
+            out.write(contents)
+
+        attachment = TicketAttachment(
+            ticket_id=ticket.id,
+            uploaded_by=current_user.id,
+            file_name=f.filename,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=f.content_type,
+        )
+        db.add(attachment)
+        created_attachments.append(attachment)
+
+    db.commit()
+    for att in created_attachments:
+        db.refresh(att)
+
+    return created_attachments
 
 
 def get_ticket_attachments(

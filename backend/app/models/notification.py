@@ -21,5 +21,5 @@ class Notification(Base):
     is_read = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    user = relationship("User", foreign_keys=[user_id])
+    user = relationship("User", back_populates="notifications", foreign_keys=[user_id])
     ticket = relationship("Ticket", foreign_keys=[ticket_id])

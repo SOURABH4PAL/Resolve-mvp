@@ -31,3 +31,4 @@ class User(Base):
     assigned_tickets = relationship("Ticket", foreign_keys="Ticket.assigned_to", back_populates="assignee")
     comments = relationship("TicketComment", back_populates="user")
     attachments = relationship("TicketAttachment", back_populates="uploader")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
