@@ -8,6 +8,7 @@ from app.database import Base
 
 class UserRole(str, enum.Enum):
     EMPLOYEE = "EMPLOYEE"
+    RESOLVER = "RESOLVER"
     SUPER_ADMIN = "SUPER_ADMIN"
 
 
@@ -25,7 +26,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    department = relationship("Department", back_populates="users")
+    department = relationship("Department", foreign_keys=[department_id], back_populates="users")
     created_tickets = relationship("Ticket", foreign_keys="Ticket.created_by", back_populates="creator")
     assigned_tickets = relationship("Ticket", foreign_keys="Ticket.assigned_to", back_populates="assignee")
     comments = relationship("TicketComment", back_populates="user")

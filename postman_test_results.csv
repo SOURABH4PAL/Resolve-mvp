@@ -1,0 +1,54 @@
+Test ID,Folder,Name,Method,Endpoint,Scenario,Expected Status,Actual Status,Result,Details
+TC-HEALTH-01,01. Health & Readiness,GET /health (Root Service & Schema Readiness),GET,/health,Verify root health check reports healthy and schema ready,200,200,PASSED,OK
+TC-HEALTH-02,01. Health & Readiness,GET /api/health (API Prefix Health Endpoint),GET,/api/health,Verify API-prefixed health endpoint responds healthy,200,200,PASSED,OK
+TC-AUTH-01,02. Authentication,POST /api/auth/login - Super Admin Login,POST,/api/auth/login,Admin login returns JWT token and SUPER_ADMIN role,200,200,PASSED,OK
+TC-AUTH-02,02. Authentication,POST /api/auth/login - Employee Login,POST,/api/auth/login,Employee login returns JWT token and EMPLOYEE role,200,200,PASSED,OK
+TC-AUTH-03,02. Authentication,POST /api/auth/login - Resolver Login,POST,/api/auth/login,Resolver staff login returns valid token,200,200,PASSED,OK
+TC-AUTH-04,02. Authentication,POST /api/auth/login - Invalid Password,POST,/api/auth/login,Login with incorrect password rejected with 401 Unauthorized,401,401,PASSED,OK
+TC-AUTH-05,02. Authentication,POST /api/auth/login - Nonexistent User,POST,/api/auth/login,Login with unknown email rejected with 401 Unauthorized,401,401,PASSED,OK
+TC-AUTH-06,02. Authentication,POST /api/auth/login - Missing Fields,POST,/api/auth/login,Empty login body rejected with 422 Unprocessable Entity,422,422,PASSED,OK
+TC-USER-01,03. Users & Profiles,GET /api/users/me - Super Admin Profile,GET,/api/users/me,Super Admin profile retrieved with sanitized fields,200,200,PASSED,OK
+TC-USER-02,03. Users & Profiles,GET /api/users/me - Employee Profile,GET,/api/users/me,Employee profile retrieved,200,200,PASSED,OK
+TC-USER-03,03. Users & Profiles,GET /api/users/me - Missing Authentication,GET,/api/users/me,Unauthenticated access rejected with 401 Unauthorized,401,401,PASSED,OK
+TC-USER-04,03. Users & Profiles,GET /api/users - List Employees (Admin),GET,/api/users,Super Admin lists all employee accounts,200,200,PASSED,OK
+TC-USER-05,03. Users & Profiles,GET /api/users - Forbidden for Normal Employee,GET,/api/users,Normal employee forbidden from accessing full user listing,403,403,PASSED,OK
+TC-ORG-01,04. Org Hierarchy,GET /api/departments - List Departments,GET,/api/departments,Fetch list of active departments,200,200,PASSED,OK
+TC-ORG-02,04. Org Hierarchy,GET /api/categories - List Categories,GET,/api/categories,Fetch list of categories,200,200,PASSED,OK
+TC-ORG-03,04. Org Hierarchy,GET /api/subcategories - List Subcategories,GET,/api/subcategories,Fetch subcategories,200,200,PASSED,OK
+TC-TKT-01,05. Ticket Lifecycle,POST /api/tickets - Create Valid Ticket,POST,/api/tickets,Employee creates a valid ticket with priority HIGH,201,201,PASSED,OK
+TC-TKT-02,05. Ticket Lifecycle,POST /api/tickets - Missing Title & Description,POST,/api/tickets,Ticket creation missing required fields rejected with 422,422,422,PASSED,OK
+TC-TKT-03,05. Ticket Lifecycle,POST /api/tickets - Nonexistent Category ID,POST,/api/tickets,Ticket with nonexistent category rejected with 422,422,422,PASSED,OK
+TC-TKT-04,05. Ticket Lifecycle,GET /api/tickets - List Tickets,GET,/api/tickets,List tickets accessible to authenticated user,200,200,PASSED,OK
+TC-TKT-05,05. Ticket Lifecycle,GET /api/tickets/{{ticket_id}} - Get Ticket by UUID,GET,/api/tickets/{{ticket_id}},Retrieve ticket details using UUID,200,200,PASSED,OK
+TC-TKT-06,05. Ticket Lifecycle,GET /api/tickets/{{ticket_number}} - Get Ticket by Number,GET,/api/tickets/{{ticket_number}},Retrieve ticket details using human-readable ticket_number,200,200,PASSED,OK
+TC-TKT-07,05. Ticket Lifecycle,GET /api/tickets/nonexistent - Nonexistent Ticket ID,GET,/api/tickets/00000000-0000-0000-0000-000000000000,Lookup of nonexistent ticket returns 404 Not Found,404,404,PASSED,OK
+TC-TKT-08,05. Ticket Lifecycle,PUT /api/tickets/{{ticket_id}}/assign - Admin Assigns to Staff,PUT,/api/tickets/{{ticket_id}}/assign,Admin assigns ticket to resolver user,200,200,PASSED,OK
+TC-TKT-09,05. Ticket Lifecycle,PUT /api/tickets/{{ticket_id}}/assign - Employee Forbidden,PUT,/api/tickets/{{ticket_id}}/assign,Normal employee cannot assign tickets (403 Forbidden),403,403,PASSED,OK
+TC-TKT-10,05. Ticket Lifecycle,PUT /api/tickets/{{ticket_id}}/status - Move to IN_PROGRESS,PUT,/api/tickets/{{ticket_id}}/status,Assigned resolver moves ticket to IN_PROGRESS,200,200,PASSED,OK
+TC-TKT-11,05. Ticket Lifecycle,PUT /api/tickets/{{ticket_id}}/resolve - Resolve Ticket,PUT,/api/tickets/{{ticket_id}}/resolve,Assigned resolver marks ticket as RESOLVED,200,200,PASSED,OK
+TC-TKT-12,05. Ticket Lifecycle,PUT /api/tickets/{{ticket_id}}/close - Close by Ticket Creator,PUT,/api/tickets/{{ticket_id}}/close,Ticket creator closes the resolved ticket,200,200,PASSED,OK
+TC-CMT-01,06. Comments,POST /api/tickets/{{ticket_id}}/comments - Add Public Comment,POST,/api/tickets/{{ticket_id}}/comments,Add public comment to ticket,201,201,PASSED,OK
+TC-CMT-02,06. Comments,POST /api/tickets/{{ticket_id}}/comments - Add Internal Note,POST,/api/tickets/{{ticket_id}}/comments,Admin adds internal staff-only note,201,201,PASSED,OK
+TC-CMT-03,06. Comments,POST /api/tickets/{{ticket_id}}/comments - Empty Content Rejected,POST,/api/tickets/{{ticket_id}}/comments,Empty comment rejected with 422,422,422,PASSED,OK
+TC-CMT-04,06. Comments,GET /api/tickets/{{ticket_id}}/comments - List Comments,GET,/api/tickets/{{ticket_id}}/comments,Retrieve list of comments on ticket,200,200,PASSED,OK
+TC-ATT-01,07. Attachments,POST /api/tickets/{{ticket_id}}/attachments - Upload Attachment,POST,/api/tickets/{{ticket_id}}/attachments,Upload diagnostic file attachment to ticket,201,201,PASSED,OK
+TC-ATT-02,07. Attachments,GET /api/tickets/{{ticket_id}}/attachments - List Attachments,GET,/api/tickets/{{ticket_id}}/attachments,List file attachments for ticket,200,200,PASSED,OK
+TC-ATT-03,07. Attachments,GET /api/attachments/{{attachment_id}}/download - Download Attachment,GET,/api/attachments/{{attachment_id}}/download,Download uploaded attachment file,200,200,PASSED,OK
+TC-ESC-01,08. Escalations,POST /api/tickets/{{ticket_id}}/escalate - Escalate by Creator,POST,/api/tickets/{{ticket_id}}/escalate,Ticket creator raises escalation,201,201,PASSED,OK
+TC-ESC-02,08. Escalations,GET /api/escalations - List All Escalations (Admin),GET,/api/escalations,Admin retrieves all company escalations,200,200,PASSED,OK
+TC-ESC-03,08. Escalations,GET /api/tickets/{{ticket_id}}/escalations - Ticket Escalations,GET,/api/tickets/{{ticket_id}}/escalations,Retrieve escalations specific to ticket,200,200,PASSED,OK
+TC-NTF-01,09. Notifications,GET /api/notifications - List User Notifications,GET,/api/notifications,Fetch notifications for logged in user,200,200,PASSED,OK
+TC-NTF-02,09. Notifications,PUT /api/notifications/read-all - Mark All Read,PUT,/api/notifications/read-all,Mark all notifications read for user,200,200,PASSED,OK
+TC-SLA-01,10. SLA Policies,POST /api/sla-policies - Create Policy (Admin),POST,/api/sla-policies,Admin creates an SLA policy,201,201,PASSED,OK
+TC-SLA-02,10. SLA Policies,POST /api/sla-policies - Employee Forbidden,POST,/api/sla-policies,Normal employee forbidden from creating SLA policy,403,403,PASSED,OK
+TC-SLA-03,10. SLA Policies,GET /api/sla-policies - List Policies,GET,/api/sla-policies,List active SLA policies,200,200,PASSED,OK
+TC-SLA-04,10. SLA Policies,POST /api/sla-policies/calculate-due - Calculate Due Times,POST,/api/sla-policies/calculate-due,Calculate first response and resolution deadlines,200,200,PASSED,OK
+TC-FAQ-01,11. FAQs,POST /api/faqs - Create FAQ (Admin),POST,/api/faqs,Admin creates a published FAQ,201,201,PASSED,OK
+TC-FAQ-02,11. FAQs,GET /api/faqs - List FAQs (Published),GET,/api/faqs,Employee searches published knowledge base FAQs,200,200,PASSED,OK
+TC-FAQ-03,11. FAQs,GET /api/faqs/{{faq_id}} - Get Single FAQ,GET,/api/faqs/{{faq_id}},Get single FAQ by ID,200,200,PASSED,OK
+TC-RUT-01,12. Teams & Routing,POST /api/support-teams - Create Support Team (Admin),POST,/api/support-teams,Admin creates a support team under IT department,201,201,PASSED,OK
+TC-RUT-02,12. Teams & Routing,GET /api/support-teams - List Support Teams,GET,/api/support-teams,List active support teams,200,200,PASSED,OK
+TC-RUT-03,12. Teams & Routing,POST /api/routing-rules - Create Routing Rule (Admin),POST,/api/routing-rules,Admin creates a routing rule mapping category to support team,201,201,PASSED,OK
+TC-RUT-04,12. Teams & Routing,GET /api/routing-rules - List Routing Rules,GET,/api/routing-rules,List active routing rules,200,200,PASSED,OK
+TC-DSH-01,13. Dashboard & Metrics,GET /api/dashboard/stats - Admin Dashboard Stats,GET,/api/dashboard/stats,"Admin fetches system stats, priority breakdown, and recent tickets",200,200,PASSED,OK
+TC-DSH-02,13. Dashboard & Metrics,GET /api/dashboard/stats - Employee Scoped Stats,GET,/api/dashboard/stats,Employee fetches scoped ticket statistics,200,200,PASSED,OK

@@ -1,12 +1,19 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from app.schemas.user import UserRead
 
 
 class TicketCommentCreate(BaseModel):
     content: str
     is_internal: bool = False
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Comment content is required and must not be blank")
+        return v.strip()
 
 
 class TicketCommentRead(BaseModel):

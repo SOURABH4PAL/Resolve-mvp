@@ -23,6 +23,7 @@ export const AdminRoutingPage: React.FC = () => {
     employees,
     tickets,
     updateCategoryResponsibility,
+    removeCategoryResponsibility,
   } = useTickets();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -232,15 +233,29 @@ export const AdminRoutingPage: React.FC = () => {
                       </div>
 
                       {/* Right: Action */}
-                      <div>
-                        {resp ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleOpenEdit(resp)}
-                          >
-                            Change Employee
-                          </Button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {resp && resp.responsible_employee_name ? (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenEdit(resp)}
+                            >
+                              Change Employee
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              style={{ color: '#dc2626', borderColor: '#fecaca' }}
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to remove the assigned employee for ${cat.name}?`)) {
+                                  removeCategoryResponsibility(resp.id);
+                                }
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </>
                         ) : (
                           <Button
                             variant="primary"
