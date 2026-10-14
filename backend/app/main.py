@@ -1,4 +1,11 @@
+import sys
 import os
+
+# Ensure backend directory is always in sys.path
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 import logging
 from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -17,8 +24,16 @@ from app.routers import (
     departments_router,
     categories_router,
     subcategories_router,
+    reports_router,
+    notifications_router,
+    sla_policies_router,
+    escalations_router,
+    faqs_router,
+    support_teams_router,
+    routing_rules_router,
+    dashboard_router,
 )
-from app.database import engine
+from app.database import engine, init_db_schema
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("resolvehub")
@@ -28,17 +43,55 @@ settings = get_settings()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
+    openapi_url="/openapi.json" if settings.ENVIRONMENT == "development" else None,
 )
 
-# CORS Middleware (environment-driven, explicit origins without wildcard)
+
+@app.on_event("startup")
+async def validate_secret_key() -> None:
+    """Initialize DB schema and validate secret key."""
+    init_db_schema()
+
+    weak_defaults = {
+        "change-this-to-a-random-secret-key-in-production",
+        "secret",
+        "supersecret",
+        "",
+    }
+    if settings.ENVIRONMENT != "development" and settings.SECRET_KEY in weak_defaults:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value in non-development environments. "
+            "Set the SECRET_KEY environment variable before starting the server."
+        )
+    if settings.SECRET_KEY in weak_defaults:
+        logger.warning(
+            "WARNING: Using a weak default SECRET_KEY. "
+            "This is only acceptable in development. Set SECRET_KEY in production."
+        )
+
+
+# CORS Middleware (supports local development, Render, Vercel, and custom domains)
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+    "https://resolvehub-frontend-n8xy.onrender.com",
+    "https://resolve-mvp-rust.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -90,24 +143,41 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Database-aware Health Check
+# Database and Schema-aware Health Check
 def perform_health_check():
     db_status = "connected"
+    schema_status = "ready"
     is_healthy = True
+    missing_tables = []
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+            from sqlalchemy import inspect
+            inspector = inspect(conn)
+            existing_tables = set(inspector.get_table_names())
+            required_tables = {"users", "tickets", "departments", "categories"}
+            missing = required_tables - existing_tables
+            if missing:
+                schema_status = "not-ready"
+                missing_tables = sorted(list(missing))
+                is_healthy = False
     except Exception as exc:
         logger.error(f"Health-check database ping failed: {exc}")
         db_status = "disconnected"
+        schema_status = "unknown"
         is_healthy = False
 
     payload = {
         "status": "healthy" if is_healthy else "unhealthy",
         "database": db_status,
+        "schema": schema_status,
         "version": "1.0.0",
         "environment": settings.ENVIRONMENT,
     }
+    if missing_tables:
+        payload["missing_tables"] = missing_tables
+
     status_code = status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(status_code=status_code, content=payload)
 
@@ -133,20 +203,26 @@ app.include_router(attachments_router, prefix=settings.API_PREFIX)
 app.include_router(departments_router, prefix=settings.API_PREFIX)
 app.include_router(categories_router, prefix=settings.API_PREFIX)
 app.include_router(subcategories_router, prefix=settings.API_PREFIX)
+app.include_router(reports_router, prefix=settings.API_PREFIX)
+app.include_router(notifications_router, prefix=settings.API_PREFIX)
+app.include_router(sla_policies_router, prefix=settings.API_PREFIX)
+app.include_router(escalations_router, prefix=settings.API_PREFIX)
+app.include_router(faqs_router, prefix=settings.API_PREFIX)
+app.include_router(support_teams_router, prefix=settings.API_PREFIX)
+app.include_router(routing_rules_router, prefix=settings.API_PREFIX)
+app.include_router(dashboard_router, prefix=settings.API_PREFIX)
 
 # Create Upload Directory
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-# Mount Frontend static directory
-frontend_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend"))
-
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
-else:
-    @app.get("/")
-    def root():
-        return {
-            "name": settings.PROJECT_NAME,
-            "status": "online",
-            "docs": "/docs"
-        }
+@app.get("/", tags=["Root"])
+def root():
+    """Root endpoint providing service status and links to documentation."""
+    return {
+        "name": settings.PROJECT_NAME,
+        "status": "online",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+        "environment": settings.ENVIRONMENT,
+    }

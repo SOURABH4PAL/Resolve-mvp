@@ -1,0 +1,169 @@
+import React from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useTickets } from '../../context/TicketContext';
+import { Bell, LogOut, User as UserIcon, Shield, Menu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+export interface NavbarProps {
+  onToggleMobileMenu?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
+  const { currentUser, logout } = useAuth();
+  const { unreadNotificationCount } = useTickets();
+  const navigate = useNavigate();
+
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+
+  const handleNotificationClick = () => {
+    if (isSuperAdmin) {
+      navigate('/admin/activity');
+    } else {
+      navigate('/employee/notifications');
+    }
+  };
+
+  const handleProfileClick = () => {
+    if (isSuperAdmin) {
+      navigate('/admin/settings');
+    } else {
+      navigate('/employee/profile');
+    }
+  };
+
+  return (
+    <header className="app-navbar">
+      <div className="navbar-left">
+        <button
+          className="mobile-menu-btn"
+          onClick={onToggleMobileMenu}
+          aria-label="Toggle navigation menu"
+        >
+          <Menu size={20} />
+        </button>
+
+        <h2 className="navbar-title">
+          ResolveHub{' '}
+          <span
+            className="navbar-subtitle"
+            style={{
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              color: 'var(--color-slate-400)',
+              marginLeft: 8,
+            }}
+          >
+            {isSuperAdmin ? 'Enterprise Administration' : 'Employee Support Portal'}
+          </span>
+        </h2>
+      </div>
+
+      <div className="navbar-right">
+        {/* Current User Role Badge */}
+        {currentUser && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: isSuperAdmin ? '#fef2f2' : '#eef2ff',
+              border: `1px solid ${isSuperAdmin ? '#fecaca' : '#c7d2fe'}`,
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.775rem',
+            }}
+          >
+            <Shield
+              size={13}
+              style={{
+                color: isSuperAdmin ? '#dc2626' : 'var(--color-primary-600)',
+              }}
+            />
+            <span style={{ fontWeight: 600, color: isSuperAdmin ? '#991b1b' : '#3730a3' }}>
+              {isSuperAdmin ? 'Super Admin' : 'Employee'}
+            </span>
+          </div>
+        )}
+
+        {/* Current User Role Badge */}
+        {currentUser && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: 'var(--color-slate-100)',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.8rem',
+            }}
+          >
+            <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>
+              {currentUser.name}
+            </span>
+          </div>
+        )}
+
+        {/* Notification Icon (Employee Portal only) */}
+        {!isSuperAdmin && (
+          <button
+            className="icon-button"
+            onClick={handleNotificationClick}
+            title="Notifications"
+            aria-label="View notifications"
+            style={{ position: 'relative' }}
+          >
+            <Bell size={19} />
+            {unreadNotificationCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 3px',
+                  border: '2px solid #ffffff',
+                  lineHeight: 1,
+                }}
+              >
+                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Profile */}
+        <button
+          className="icon-button"
+          onClick={handleProfileClick}
+          title={isSuperAdmin ? 'Admin Settings & Profile' : 'My Profile'}
+          aria-label="View profile"
+        >
+          <UserIcon size={19} />
+        </button>
+
+        {/* Logout */}
+        <button
+          className="icon-button"
+          onClick={() => {
+            logout();
+            navigate('/login');
+          }}
+          title="Log out"
+          aria-label="Log out"
+        >
+          <LogOut size={19} />
+        </button>
+      </div>
+    </header>
+  );
+};

@@ -14,6 +14,13 @@ class CategoryCreate(CategoryBase):
     pass
 
 
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    department_id: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class CategoryRead(CategoryBase):
     id: str
     created_at: datetime
