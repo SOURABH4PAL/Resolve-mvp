@@ -131,6 +131,49 @@ def ensure_initial_seed():
             )
             db.add_all([admin, emp, resolver])
             db.commit()
+
+        # Seed baseline FAQs if none exist
+        from app.models.faq import FAQ
+        if db.query(FAQ).count() == 0:
+            it_dept = db.query(Department).filter(Department.name.ilike("%IT%")).first()
+            hr_dept = db.query(Department).filter(Department.name.ilike("%Human Resources%")).first()
+            fin_dept = db.query(Department).filter(Department.name.ilike("%Finance%")).first() or it_dept
+
+            hw_cat = db.query(Category).filter(Category.name.ilike("%Hardware%")).first()
+            leave_cat = db.query(Category).filter(Category.name.ilike("%Leave%")).first() or db.query(Category).first()
+            pay_cat = db.query(Category).filter(Category.name.ilike("%Payroll%")).first() or db.query(Category).first()
+
+            default_faqs = [
+                FAQ(
+                    question="How do I request a replacement laptop charger?",
+                    answer="Submit an IT Support ticket under Hardware Issues. The responsible IT employee will arrange pickup at the 3rd floor reception.",
+                    department_id=it_dept.id if it_dept else None,
+                    category_id=hw_cat.id if hw_cat else None,
+                    views=420,
+                    helpful_count=85,
+                    is_published=True,
+                ),
+                FAQ(
+                    question="Where can I download my annual Form 16 / tax statement?",
+                    answer="Form 16 is published annually by the Finance department in the payroll portal under Tax Documents every June 15.",
+                    department_id=fin_dept.id if fin_dept else None,
+                    category_id=pay_cat.id if pay_cat else None,
+                    views=890,
+                    helpful_count=210,
+                    is_published=True,
+                ),
+                FAQ(
+                    question="What is the policy for carry-forward leaves?",
+                    answer="Up to 15 earned leaves can be carried over into the new calendar year. Unused leaves beyond 15 lapse on Dec 31.",
+                    department_id=hr_dept.id if hr_dept else None,
+                    category_id=leave_cat.id if leave_cat else None,
+                    views=650,
+                    helpful_count=140,
+                    is_published=True,
+                ),
+            ]
+            db.add_all(default_faqs)
+            db.commit()
     except Exception:
         db.rollback()
     finally:
@@ -151,5 +194,26 @@ def init_db_schema():
                 conn.commit()
             except Exception:
                 pass
+
+        # Check if helpful_count exists in faqs
+        try:
+            conn.execute(text("SELECT helpful_count FROM faqs LIMIT 1"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE faqs ADD COLUMN helpful_count INTEGER DEFAULT 0 NOT NULL"))
+                conn.commit()
+            except Exception:
+                pass
+
+        # Check if views exists in faqs
+        try:
+            conn.execute(text("SELECT views FROM faqs LIMIT 1"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE faqs ADD COLUMN views INTEGER DEFAULT 0 NOT NULL"))
+                conn.commit()
+            except Exception:
+                pass
+
     ensure_initial_seed()
 

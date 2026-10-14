@@ -8,6 +8,8 @@ class FAQCreate(BaseModel):
     answer: str
     department_id: Optional[str] = None
     category_id: Optional[str] = None
+    department_name: Optional[str] = None
+    category_name: Optional[str] = None
     is_published: bool = True
 
     @field_validator("question")
@@ -30,6 +32,8 @@ class FAQUpdate(BaseModel):
     answer: Optional[str] = None
     department_id: Optional[str] = None
     category_id: Optional[str] = None
+    department_name: Optional[str] = None
+    category_name: Optional[str] = None
     is_published: Optional[bool] = None
 
 
@@ -37,9 +41,14 @@ class FAQRead(BaseModel):
     id: str
     department_id: Optional[str] = None
     category_id: Optional[str] = None
+    department_name: Optional[str] = None
+    category_name: Optional[str] = None
     question: str
     answer: str
     is_published: bool
+    helpful_count: int = 0
+    views: int = 0
+    is_voted: bool = False
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime

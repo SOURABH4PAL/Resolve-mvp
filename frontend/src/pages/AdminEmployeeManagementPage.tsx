@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { Table, Column } from '../components/common/Table';
 import { Modal } from '../components/common/Modal';
-import { User, Category } from '../types';
+import { User, Category, PaginatedResponse } from '../types';
+import { api } from '../api/client';
 import {
   Users,
   Search,
@@ -39,6 +40,11 @@ export const AdminEmployeeManagementPage: React.FC = () => {
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const pageSize = 10;
+
+  const [employeesData, setEmployeesData] = useState<User[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
 
   // Notification banners
   const [successMsg, setSuccessMsg] = useState('');
@@ -84,6 +90,45 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     }
     setCurrentPage(1);
   };
+
+  const fetchPaginatedEmployees = useCallback(async () => {
+    setIsLoadingEmployees(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('envelope', 'true');
+      params.append('page', String(currentPage));
+      params.append('page_size', String(pageSize));
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+      if (selectedDept !== 'ALL') {
+        const foundDept = departments.find(d => d.name === selectedDept || d.id === selectedDept);
+        if (foundDept) {
+          params.append('department_id', foundDept.id);
+        }
+      }
+      if (sortBy) {
+        const validSort = ['name', 'email', 'employee_id'].includes(sortBy) ? sortBy : 'name';
+        params.append('sort_by', validSort);
+        params.append('sort_order', sortOrder);
+      }
+
+      const res = await api.get<PaginatedResponse<User>>(`/users?${params.toString()}`);
+      if (res && Array.isArray(res.items)) {
+        setEmployeesData(res.items);
+        setTotalRecords(res.total);
+        setTotalPages(res.total_pages || 1);
+      }
+    } catch (err) {
+      console.error('Failed to fetch paginated employees:', err);
+    } finally {
+      setIsLoadingEmployees(false);
+    }
+  }, [currentPage, pageSize, searchTerm, selectedDept, sortBy, sortOrder, departments]);
+
+  useEffect(() => {
+    fetchPaginatedEmployees();
+  }, [fetchPaginatedEmployees]);
 
   const handleOpenCreateEmployee = () => {
     setEditingEmployee(null);
@@ -144,6 +189,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
         setSuccessMsg(`Employee '${empName}' created successfully!`);
       }
       setEmployeeModalOpen(false);
+      fetchPaginatedEmployees();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       setErrorMsg(err.message || 'Operation failed');
@@ -164,6 +210,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       await deleteEmployee(empToDelete.id);
       setSuccessMsg(`Employee '${empToDelete.name}' removed or deactivated.`);
       setDeleteModalOpen(false);
+      fetchPaginatedEmployees();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to remove employee');
@@ -206,48 +253,6 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const filteredEmployees = employees.filter(emp => {
-    if (searchTerm) {
-      const matchName = emp.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchEmail = emp.email.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchId = emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase());
-      if (!matchName && !matchEmail && !matchId) return false;
-    }
-
-    if (selectedDept !== 'ALL') {
-      const dept = departments.find(d => d.id === emp.department_id);
-      const deptName = dept?.name || emp.department?.name;
-      if (deptName !== selectedDept) return false;
-    }
-
-    return true;
-  });
-
-  const sortedEmployees = [...filteredEmployees].sort((a, b) => {
-    let valA = '';
-    let valB = '';
-    if (sortBy === 'employee_id') {
-      valA = a.employee_id || '';
-      valB = b.employee_id || '';
-    } else if (sortBy === 'department') {
-      const deptA = departments.find(d => d.id === a.department_id)?.name || a.department?.name || '';
-      const deptB = departments.find(d => d.id === b.department_id)?.name || b.department?.name || '';
-      valA = deptA;
-      valB = deptB;
-    } else {
-      valA = a.name || '';
-      valB = b.name || '';
-    }
-    const cmp = valA.localeCompare(valB);
-    return sortOrder === 'asc' ? cmp : -cmp;
-  });
-
-  const totalPages = Math.ceil(sortedEmployees.length / pageSize) || 1;
-  const paginatedEmployees = sortedEmployees.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
   const columns: Column<User>[] = [
     {
       key: 'employee_id',
@@ -278,7 +283,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       sortable: true,
       render: emp => {
         const dept = departments.find(d => d.id === emp.department_id);
-        const deptName = dept?.name || emp.department?.name || 'General';
+        const deptName = dept?.name || emp.department?.name || 'Not assigned';
         return (
           <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)' }}>
             {deptName}
@@ -311,7 +316,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       render: emp => {
         const empResp = responsibilities
           .filter(r => r.responsible_employee_id === emp.id || r.responsible_employee_email === emp.email)
-          .map(r => r.category_name);
+          .map(r => (r.subcategory_name ? `${r.category_name} (${r.subcategory_name})` : r.category_name));
 
         return (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -534,21 +539,21 @@ export const AdminEmployeeManagementPage: React.FC = () => {
       <div className="card">
         <Table<User>
           columns={columns}
-          data={paginatedEmployees}
-          emptyMessage="No employees found matching filter."
+          data={employeesData}
+          emptyMessage={isLoadingEmployees ? "Loading employees from server..." : "No employees found matching filter."}
           sortBy={sortBy}
           sortOrder={sortOrder}
           onSort={handleSort}
           pagination={{
             currentPage,
             totalPages,
-            totalRecords: sortedEmployees.length,
+            totalRecords,
             pageSize,
             onPageChange: setCurrentPage,
           }}
         />
         <div style={{ padding: '14px 20px', borderTop: '1px solid var(--color-slate-100)', fontSize: '0.825rem', color: 'var(--color-slate-500)' }}>
-          Showing {paginatedEmployees.length} of {sortedEmployees.length} total active organization members
+          Showing page {currentPage} of {totalPages} ({totalRecords} total active organization members)
         </div>
       </div>
 

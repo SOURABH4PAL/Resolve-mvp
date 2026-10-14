@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, ShieldCheck, UserCheck, Clock, CheckCircle2 } from 'lucide-react';
+import { formatDateTime } from '../utils/formatters';
 
 interface AuditEvent {
   id: string;
@@ -121,7 +122,7 @@ export const AdminActivityPage: React.FC = () => {
                     </span>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)' }}>
-                    {new Date(ev.timestamp).toLocaleString()}
+                    {formatDateTime(ev.timestamp)}
                   </span>
                 </div>
                 <div style={{ fontSize: '0.825rem', color: 'var(--color-slate-600)', marginTop: 4 }}>

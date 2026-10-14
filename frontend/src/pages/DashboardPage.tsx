@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Table, Column } from '../components/common/Table';
 import { Ticket } from '../types';
+import { formatDate } from '../utils/formatters';
 import {
   PlusCircle,
   Clock,
@@ -106,14 +107,11 @@ export const DashboardPage: React.FC = () => {
       key: 'updated_at',
       header: 'Last Updated',
       width: '130px',
-      render: ticket => {
-        const date = new Date(ticket.updated_at || ticket.created_at);
-        return (
-          <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
-            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </span>
-        );
-      },
+      render: ticket => (
+        <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
+          {formatDate(ticket.updated_at || ticket.created_at)}
+        </span>
+      ),
     },
     {
       key: 'action',

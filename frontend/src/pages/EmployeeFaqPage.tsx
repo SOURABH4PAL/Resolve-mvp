@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, BookOpen, ThumbsUp, ChevronDown, ChevronUp, HelpCircle, Building2 } from 'lucide-react';
 import { FaqItem } from '../types';
-import { getFaqs, saveFaqs } from '../utils/faqStorage';
+import { api } from '../api/client';
 
 export const EmployeeFaqPage: React.FC = () => {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
@@ -9,9 +9,28 @@ export const EmployeeFaqPage: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [votedIds, setVotedIds] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const loadFaqs = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.get<FaqItem[]>('/faqs');
+      const loaded = data || [];
+      setFaqs(loaded);
+      const votes: Record<string, boolean> = {};
+      loaded.forEach(f => {
+        if (f.is_voted) votes[f.id] = true;
+      });
+      setVotedIds(votes);
+    } catch (err) {
+      console.error('Failed to load FAQs:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setFaqs(getFaqs());
+    loadFaqs();
   }, []);
 
   // Department list
@@ -27,23 +46,30 @@ export const EmployeeFaqPage: React.FC = () => {
   });
 
   const handleToggleExpand = (id: string) => {
-    setExpandedId(prev => (prev === id ? null : id));
+    setExpandedId(prev => {
+      const next = prev === id ? null : id;
+      if (next) {
+        api.post('/faqs/' + id + '/view').catch(() => {});
+      }
+      return next;
+    });
   };
 
-  const handleHelpfulVote = (id: string, e: React.MouseEvent) => {
+  const handleHelpfulVote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (votedIds[id]) return;
 
-    const updated = faqs.map(f => {
-      if (f.id === id) {
-        return { ...f, helpful_count: f.helpful_count + 1 };
-      }
-      return f;
-    });
-
-    setFaqs(updated);
-    saveFaqs(updated);
-    setVotedIds(prev => ({ ...prev, [id]: true }));
+    try {
+      const res = await api.post<{ status: string; helpful_count: number; is_voted: boolean }>('/faqs/' + id + '/upvote');
+      setFaqs(prev => prev.map(f => {
+        if (f.id === id) {
+          return { ...f, helpful_count: res.helpful_count, is_voted: res.is_voted };
+        }
+        return f;
+      }));
+      setVotedIds(prev => ({ ...prev, [id]: res.is_voted }));
+    } catch (err: unknown) {
+      console.error('Failed to vote FAQ:', err);
+    }
   };
 
   return (
@@ -220,7 +246,7 @@ export const EmployeeFaqPage: React.FC = () => {
                       <span>Was this answer helpful?</span>
                       <button
                         onClick={e => handleHelpfulVote(faq.id, e)}
-                        disabled={isVoted}
+                        title={isVoted ? 'Click to remove upvote' : 'Mark as helpful'}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -233,10 +259,10 @@ export const EmployeeFaqPage: React.FC = () => {
                           color: isVoted ? '#16a34a' : 'var(--color-slate-700)',
                           fontSize: '0.75rem',
                           fontWeight: 600,
-                          cursor: isVoted ? 'default' : 'pointer',
+                          cursor: 'pointer',
                         }}
                       >
-                        <ThumbsUp size={14} /> {faq.helpful_count} {isVoted ? 'Thank you!' : 'Yes'}
+                        <ThumbsUp size={14} /> {faq.helpful_count} {isVoted ? 'Upvoted' : 'Helpful'}
                       </button>
                     </div>
                   </div>

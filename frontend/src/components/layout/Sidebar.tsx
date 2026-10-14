@@ -24,7 +24,7 @@ import { useTickets } from '../../context/TicketContext';
 
 export const Sidebar: React.FC = () => {
   const { currentUser } = useAuth();
-  const { tickets } = useTickets();
+  const { tickets, unreadNotificationCount } = useTickets();
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
 
@@ -141,7 +141,6 @@ export const Sidebar: React.FC = () => {
             >
               <Clock size={18} />
               <span>SLA & Escalation</span>
-              <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: 4, backgroundColor: '#fef3c7', color: '#92400e' }}>Soon</span>
             </NavLink>
 
             <NavLink
@@ -237,6 +236,9 @@ export const Sidebar: React.FC = () => {
             >
               <Bell size={18} />
               <span>Notifications</span>
+              {unreadNotificationCount > 0 && (
+                <span className="nav-badge active-badge">{unreadNotificationCount}</span>
+              )}
             </NavLink>
 
             <NavLink

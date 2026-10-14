@@ -4,7 +4,7 @@ import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { Table, Column } from '../components/common/Table';
 import { Modal } from '../components/common/Modal';
-import { Category, CategoryResponsibility } from '../types';
+import { Category, Subcategory, CategoryResponsibility } from '../types';
 import { Route, UserMinus, UserPlus, RefreshCw, Search } from 'lucide-react';
 
 export const AdminCategoriesPage: React.FC = () => {
@@ -16,13 +16,25 @@ export const AdminCategoriesPage: React.FC = () => {
     employees,
     updateCategoryResponsibility,
     removeCategoryResponsibility,
+    createSubcategory,
+    updateSubcategory,
+    deleteSubcategory,
   } = useTickets();
   const navigate = useNavigate();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
   const [selectedResp, setSelectedResp] = useState<CategoryResponsibility | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [empSearch, setEmpSearch] = useState('');
+
+  // Subcategory Add/Edit Modal
+  const [subcatModalOpen, setSubcatModalOpen] = useState(false);
+  const [editingSubcat, setEditingSubcat] = useState<Subcategory | null>(null);
+  const [subcatName, setSubcatName] = useState('');
+  const [subcatDesc, setSubcatDesc] = useState('');
+  const [isSubmittingSubcat, setIsSubmittingSubcat] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
@@ -33,8 +45,19 @@ export const AdminCategoriesPage: React.FC = () => {
 
   const handleOpenAssignModal = (cat: Category, resp?: CategoryResponsibility) => {
     setSelectedCategory(cat);
+    setSelectedSubcategory(null);
     setSelectedResp(resp || null);
     setSelectedEmployeeId(resp?.responsible_employee_id || employees[0]?.id || '');
+    setEmpSearch('');
+    setModalOpen(true);
+  };
+
+  const handleOpenSubcategoryAssignModal = (cat: Category, sub: Subcategory, resp?: CategoryResponsibility) => {
+    setSelectedCategory(cat);
+    setSelectedSubcategory(sub);
+    setSelectedResp(resp || null);
+    setSelectedEmployeeId(resp?.responsible_employee_id || employees[0]?.id || '');
+    setEmpSearch('');
     setModalOpen(true);
   };
 
@@ -55,24 +78,97 @@ export const AdminCategoriesPage: React.FC = () => {
     if (!emp) return;
 
     const dept = departments.find(d => d.id === selectedCategory.department_id) || selectedCategory.department;
-    const respId = selectedResp?.id || `resp-${selectedCategory.id}`;
 
-    updateCategoryResponsibility(
-      respId,
-      emp.id,
-      emp.name,
-      emp.email,
-      {
-        department_id: dept?.id || '',
-        department_name: dept?.name || '',
-        category_id: selectedCategory.id,
-        category_name: selectedCategory.name,
-      }
-    );
+    if (selectedSubcategory) {
+      const respId = selectedResp?.id || `resp-sub-${selectedSubcategory.id}`;
+      updateCategoryResponsibility(
+        respId,
+        emp.id,
+        emp.name,
+        emp.email,
+        {
+          department_id: dept?.id || '',
+          department_name: dept?.name || '',
+          category_id: selectedCategory.id,
+          category_name: selectedCategory.name,
+          subcategory_id: selectedSubcategory.id,
+          subcategory_name: selectedSubcategory.name,
+        }
+      );
+    } else {
+      const respId = selectedResp?.id || `resp-${selectedCategory.id}`;
+      updateCategoryResponsibility(
+        respId,
+        emp.id,
+        emp.name,
+        emp.email,
+        {
+          department_id: dept?.id || '',
+          department_name: dept?.name || '',
+          category_id: selectedCategory.id,
+          category_name: selectedCategory.name,
+        }
+      );
+    }
 
     setModalOpen(false);
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
     setSelectedResp(null);
+  };
+
+  const handleOpenAddSubcategory = (cat: Category) => {
+    setSelectedCategory(cat);
+    setEditingSubcat(null);
+    setSubcatName('');
+    setSubcatDesc('');
+    setSubcatModalOpen(true);
+  };
+
+  const handleOpenEditSubcategory = (cat: Category, sub: Subcategory) => {
+    setSelectedCategory(cat);
+    setEditingSubcat(sub);
+    setSubcatName(sub.name);
+    setSubcatDesc(sub.description || '');
+    setSubcatModalOpen(true);
+  };
+
+  const handleSaveSubcategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCategory || !subcatName.trim()) return;
+
+    setIsSubmittingSubcat(true);
+    try {
+      if (editingSubcat) {
+        await updateSubcategory(editingSubcat.id, {
+          name: subcatName.trim(),
+          description: subcatDesc.trim() || undefined,
+        });
+      } else {
+        await createSubcategory({
+          category_id: selectedCategory.id,
+          name: subcatName.trim(),
+          description: subcatDesc.trim() || undefined,
+        });
+      }
+      setSubcatModalOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save subcategory';
+      alert(msg);
+    } finally {
+      setIsSubmittingSubcat(false);
+    }
+  };
+
+  const handleDeleteSubcategory = async (sub: Subcategory) => {
+    if (window.confirm(`Are you sure you want to delete subcategory "${sub.name}"?`)) {
+      try {
+        await deleteSubcategory(sub.id);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to delete subcategory';
+        alert(msg);
+      }
+    }
   };
 
   const handleSearchChange = (term: string) => {
@@ -159,7 +255,7 @@ export const AdminCategoriesPage: React.FC = () => {
         const dept = departments.find(d => d.id === cat.department_id) || cat.department;
         return (
           <span style={{ fontSize: '0.85rem', color: 'var(--color-slate-700)', fontWeight: 500 }}>
-            {dept?.name || 'Operations'}
+            {dept?.name || 'Not assigned'}
           </span>
         );
       },
@@ -170,7 +266,7 @@ export const AdminCategoriesPage: React.FC = () => {
       width: '240px',
       render: cat => {
         const resp = responsibilities.find(
-          r => r.category_id === cat.id || r.category_name.toLowerCase() === cat.name.toLowerCase()
+          r => !r.subcategory_id && (r.category_id === cat.id || r.category_name.toLowerCase() === cat.name.toLowerCase())
         );
         const hasEmployee = resp && resp.responsible_employee_name && resp.responsible_employee_name.trim() !== '';
 
@@ -214,29 +310,112 @@ export const AdminCategoriesPage: React.FC = () => {
     },
     {
       key: 'subcategories',
-      header: 'Subcategories',
+      header: 'Subcategories & Assignees',
       render: cat => {
         const subs = subcategories.filter(s => s.category_id === cat.id);
+        const catResp = responsibilities.find(
+          r => !r.subcategory_id && (r.category_id === cat.id || r.category_name.toLowerCase() === cat.name.toLowerCase())
+        );
         return (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {subs.length > 0 ? (
-              subs.map(s => (
-                <span
-                  key={s.id}
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    backgroundColor: '#f1f5f9',
-                    color: 'var(--color-slate-700)',
-                  }}
-                >
-                  {s.name}
-                </span>
-              ))
+              subs.map(s => {
+                const subResp = responsibilities.find(r => r.subcategory_id === s.id);
+                return (
+                  <div
+                    key={s.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      fontSize: '0.75rem',
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>{s.name}</span>
+                      {subResp && subResp.responsible_employee_name ? (
+                        <div style={{ fontSize: '0.7rem', color: '#16a34a' }}>
+                          Assignee: <strong>{subResp.responsible_employee_name}</strong>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)' }}>
+                          Assignee: {catResp?.responsible_employee_name ? `Inherits (${catResp.responsible_employee_name})` : 'Unassigned'}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        onClick={() => handleOpenSubcategoryAssignModal(cat, s, subResp)}
+                        title="Assign Employee to Subcategory"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--color-primary-600)',
+                          cursor: 'pointer',
+                          padding: '1px 4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {subResp?.responsible_employee_name ? 'Reassign' : 'Assign'}
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditSubcategory(cat, s)}
+                        title="Edit Subcategory"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--color-slate-600)',
+                          cursor: 'pointer',
+                          padding: '1px 4px',
+                          fontSize: '0.7rem',
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubcategory(s)}
+                        title="Delete Subcategory"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '1px 4px',
+                          fontSize: '0.7rem',
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
               <span style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)' }}>Direct category</span>
             )}
+            <button
+              onClick={() => handleOpenAddSubcategory(cat)}
+              style={{
+                background: 'none',
+                border: '1px dashed #cbd5e1',
+                borderRadius: 4,
+                padding: '3px 8px',
+                fontSize: '0.7rem',
+                color: 'var(--color-primary-600)',
+                cursor: 'pointer',
+                textAlign: 'center',
+                width: 'fit-content',
+                marginTop: 2,
+              }}
+            >
+              + Add Subcategory
+            </button>
           </div>
         );
       },
@@ -396,7 +575,13 @@ export const AdminCategoriesPage: React.FC = () => {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={selectedResp && selectedResp.responsible_employee_name ? `Change Employee for ${selectedCategory?.name}` : `Assign Employee to ${selectedCategory?.name}`}
+        title={
+          selectedSubcategory
+            ? `Assign Employee to Subcategory: ${selectedSubcategory.name}`
+            : selectedResp && selectedResp.responsible_employee_name
+            ? `Change Employee for ${selectedCategory?.name}`
+            : `Assign Employee to ${selectedCategory?.name}`
+        }
         footer={
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>
@@ -411,9 +596,11 @@ export const AdminCategoriesPage: React.FC = () => {
         {selectedCategory && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>Selected Category</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>
+                {selectedSubcategory ? 'Selected Subcategory' : 'Selected Category'}
+              </div>
               <div style={{ fontWeight: 600, color: 'var(--color-slate-900)', marginTop: 2 }}>
-                {selectedCategory.name}
+                {selectedCategory.name} {selectedSubcategory ? `> ${selectedSubcategory.name}` : ''}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
                 Current Assignee: <strong>{selectedResp?.responsible_employee_name || 'Unassigned'}</strong>
@@ -424,6 +611,20 @@ export const AdminCategoriesPage: React.FC = () => {
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
                 Select Employee *
               </label>
+              <input
+                type="text"
+                placeholder="Search employee by name, email, or department..."
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid var(--color-slate-300)',
+                  fontSize: '0.825rem',
+                  marginBottom: 8,
+                }}
+              />
               <select
                 value={selectedEmployeeId}
                 onChange={e => setSelectedEmployeeId(e.target.value)}
@@ -436,18 +637,92 @@ export const AdminCategoriesPage: React.FC = () => {
                   backgroundColor: '#ffffff',
                 }}
               >
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.email}) — Dept: {emp.department?.name || 'Operations'}
-                  </option>
-                ))}
+                {employees
+                  .filter(emp => {
+                    if (!empSearch.trim()) return true;
+                    const term = empSearch.toLowerCase();
+                    const deptName = (emp.department?.name || '').toLowerCase();
+                    return (
+                      emp.name.toLowerCase().includes(term) ||
+                      emp.email.toLowerCase().includes(term) ||
+                      deptName.includes(term)
+                    );
+                  })
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.email}) — Dept: {emp.department?.name || 'Not assigned'}
+                    </option>
+                  ))}
               </select>
               <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 6 }}>
-                All new tickets submitted under <strong>{selectedCategory.name}</strong> will be routed directly to this employee.
+                All new tickets submitted under{' '}
+                <strong>
+                  {selectedCategory.name} {selectedSubcategory ? `> ${selectedSubcategory.name}` : ''}
+                </strong>{' '}
+                will be routed directly to this employee.
               </p>
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Add / Edit Subcategory Modal */}
+      <Modal
+        isOpen={subcatModalOpen}
+        onClose={() => setSubcatModalOpen(false)}
+        title={editingSubcat ? `Edit Subcategory in ${selectedCategory?.name}` : `Add Subcategory to ${selectedCategory?.name}`}
+        footer={
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setSubcatModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleSaveSubcategory} isLoading={isSubmittingSubcat}>
+              Save Subcategory
+            </Button>
+          </div>
+        }
+      >
+        <form onSubmit={handleSaveSubcategory} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+              Subcategory Name *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Keyboard Replacement"
+              value={subcatName}
+              onChange={e => setSubcatName(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--color-slate-300)',
+                fontSize: '0.875rem',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
+              Description (Optional)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Brief description of this subcategory..."
+              value={subcatDesc}
+              onChange={e => setSubcatDesc(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--color-slate-300)',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+        </form>
       </Modal>
     </div>
   );

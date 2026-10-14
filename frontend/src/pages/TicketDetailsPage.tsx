@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Ticket, TicketStatus, TicketComment, TicketAttachment } from '../types';
 import { ApiError } from '../api/client';
+import { formatDateTime } from '../utils/formatters';
 import {
   ArrowLeft,
   Building,
@@ -36,6 +37,7 @@ export const TicketDetailsPage: React.FC = () => {
     updateTicketStatus,
     resolveTicket,
     closeTicket,
+    reopenTicket,
     assignTicket,
     employees,
     getComments,
@@ -138,6 +140,8 @@ export const TicketDetailsPage: React.FC = () => {
   const isCreator = currentUser?.id === ticket.created_by;
   const canManageTicket = isSuperAdmin || isAssigned;
   const isStaff = canManageTicket;
+  const canCloseTicket = isSuperAdmin || isCreator;
+  const canReopenTicket = isSuperAdmin || isCreator;
 
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +169,16 @@ export const TicketDetailsPage: React.FC = () => {
         updated = await resolveTicket(ticket.id, 'Issue resolved by staff.');
       } else if (newStatus === 'CLOSED') {
         updated = await closeTicket(ticket.id);
+      } else if (newStatus === 'REOPENED') {
+        const reason = window.prompt(
+          'Please enter a reason for reopening this ticket:',
+          'Issue not resolved or recurred.'
+        );
+        if (reason === null) {
+          setStatusLoading(false);
+          return;
+        }
+        updated = await reopenTicket(ticket.id, reason);
       } else {
         updated = await updateTicketStatus(ticket.id, newStatus);
       }
@@ -261,18 +275,7 @@ export const TicketDetailsPage: React.FC = () => {
   };
 
   const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '—';
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateString;
-    }
+    return formatDateTime(dateString);
   };
 
   const departmentName = ticket.category?.department?.name || 'Department';
@@ -407,28 +410,32 @@ export const TicketDetailsPage: React.FC = () => {
 
               {ticket.status === 'RESOLVED' && (
                 <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    isLoading={statusLoading}
-                    leftIcon={<CheckCheck size={14} />}
-                    onClick={() => handleStatusChange('CLOSED')}
-                  >
-                    Confirm & Close
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    isLoading={statusLoading}
-                    leftIcon={<RotateCcw size={14} />}
-                    onClick={() => handleStatusChange('REOPENED')}
-                  >
-                    Reopen Issue
-                  </Button>
+                  {canCloseTicket && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      isLoading={statusLoading}
+                      leftIcon={<CheckCheck size={14} />}
+                      onClick={() => handleStatusChange('CLOSED')}
+                    >
+                      Confirm & Close
+                    </Button>
+                  )}
+                  {canReopenTicket && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      isLoading={statusLoading}
+                      leftIcon={<RotateCcw size={14} />}
+                      onClick={() => handleStatusChange('REOPENED')}
+                    >
+                      Reopen Issue
+                    </Button>
+                  )}
                 </>
               )}
 
-              {ticket.status === 'CLOSED' && (
+              {ticket.status === 'CLOSED' && canReopenTicket && (
                 <Button
                   variant="secondary"
                   size="sm"

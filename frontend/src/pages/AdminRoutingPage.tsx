@@ -29,10 +29,12 @@ export const AdminRoutingPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedResp, setSelectedResp] = useState<CategoryResponsibility | null>(null);
   const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [empSearch, setEmpSearch] = useState('');
 
   const handleOpenEdit = (resp: CategoryResponsibility) => {
     setSelectedResp(resp);
     setNewEmployeeId(resp.responsible_employee_id);
+    setEmpSearch('');
     setModalOpen(true);
   };
 
@@ -319,6 +321,20 @@ export const AdminRoutingPage: React.FC = () => {
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
                 New Responsible Employee
               </label>
+              <input
+                type="text"
+                placeholder="Search employee by name, email, or department..."
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid var(--color-slate-300)',
+                  fontSize: '0.825rem',
+                  marginBottom: 8,
+                }}
+              />
               <select
                 value={newEmployeeId}
                 onChange={e => setNewEmployeeId(e.target.value)}
@@ -331,11 +347,22 @@ export const AdminRoutingPage: React.FC = () => {
                   backgroundColor: '#ffffff',
                 }}
               >
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.email}) — Dept: {emp.department?.name || 'Operations'}
-                  </option>
-                ))}
+                {employees
+                  .filter(emp => {
+                    if (!empSearch.trim()) return true;
+                    const term = empSearch.toLowerCase();
+                    const deptName = (emp.department?.name || '').toLowerCase();
+                    return (
+                      emp.name.toLowerCase().includes(term) ||
+                      emp.email.toLowerCase().includes(term) ||
+                      deptName.includes(term)
+                    );
+                  })
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.email}) — Dept: {emp.department?.name || 'Not assigned'}
+                    </option>
+                  ))}
               </select>
               <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 6 }}>
                 All future tickets created in <strong>{selectedResp.category_name}</strong> will automatically be assigned to this employee.

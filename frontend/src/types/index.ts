@@ -1,5 +1,13 @@
 export type UserRole = 'EMPLOYEE' | 'SUPER_ADMIN';
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface User {
   id: string;
   employee_id: string;
@@ -132,6 +140,8 @@ export interface CategoryResponsibility {
   category_id: string;
   category_name: string;
   department_name: string;
+  subcategory_id?: string | null;
+  subcategory_name?: string | null;
   responsible_employee_id: string;
   responsible_employee_name: string;
   responsible_employee_email: string;
@@ -179,4 +189,5 @@ export interface FaqItem {
   category_name: string;
   views: number;
   helpful_count: number;
+  is_voted?: boolean;
 }

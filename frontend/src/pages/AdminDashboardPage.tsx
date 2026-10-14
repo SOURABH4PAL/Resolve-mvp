@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
@@ -25,6 +25,9 @@ import {
 export const AdminDashboardPage: React.FC = () => {
   const { tickets, departments, categories, responsibilities, employees, isLoadingTickets, fetchTickets } = useTickets();
   const navigate = useNavigate();
+
+  const [workloadPage, setWorkloadPage] = useState(1);
+  const workloadPageSize = 6;
 
   // Metrics
   const totalTickets = tickets.length;
@@ -60,7 +63,7 @@ export const AdminDashboardPage: React.FC = () => {
     const activeAssigned = assignedTickets.filter(t => t.status !== 'CLOSED' && t.status !== 'RESOLVED').length;
     const empResponsibilities = responsibilities
       .filter(r => r.responsible_employee_id === emp.id || r.responsible_employee_email === emp.email)
-      .map(r => r.category_name);
+      .map(r => (r.subcategory_name ? `${r.category_name} (${r.subcategory_name})` : r.category_name));
 
     return {
       id: emp.id,
@@ -71,6 +74,12 @@ export const AdminDashboardPage: React.FC = () => {
       totalAssigned: assignedTickets.length,
     };
   });
+
+  const totalWorkloadPages = Math.ceil(employeeWorkloads.length / workloadPageSize) || 1;
+  const paginatedWorkloads = employeeWorkloads.slice(
+    (workloadPage - 1) * workloadPageSize,
+    workloadPage * workloadPageSize
+  );
 
   const columns: Column<Ticket>[] = [
     {
@@ -484,52 +493,84 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
 
           <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {employeeWorkloads.map(emp => (
-              <div
-                key={emp.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-slate-900)' }}>
-                      {emp.name}
-                    </span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)' }}>
-                      ({emp.email})
-                    </span>
+            {paginatedWorkloads.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-slate-400)', fontSize: '0.85rem' }}>
+                No employees registered.
+              </div>
+            ) : (
+              paginatedWorkloads.map(emp => (
+                <div
+                  key={emp.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-slate-900)' }}>
+                        {emp.name}
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)' }}>
+                        ({emp.email})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
+                      Responsible for:{' '}
+                      <strong style={{ color: emp.responsibilities.length > 0 ? 'var(--color-primary-700)' : 'var(--color-slate-400)' }}>
+                        {emp.responsibilities.length > 0 ? emp.responsibilities.join(', ') : 'None'}
+                      </strong>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
-                    Responsible for:{' '}
-                    <strong style={{ color: 'var(--color-primary-700)' }}>
-                      {emp.responsibilities.length > 0 ? emp.responsibilities.join(', ') : 'General Support'}
-                    </strong>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        backgroundColor: emp.activeLoad > 2 ? '#fee2e2' : '#e0e7ff',
+                        color: emp.activeLoad > 2 ? '#991b1b' : '#3730a3',
+                      }}
+                    >
+                      {emp.activeLoad} Active Tickets
+                    </span>
                   </div>
                 </div>
+              ))
+            )}
 
-                <div style={{ textAlign: 'right' }}>
-                  <span
-                    style={{
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: 12,
-                      backgroundColor: emp.activeLoad > 2 ? '#fee2e2' : '#e0e7ff',
-                      color: emp.activeLoad > 2 ? '#991b1b' : '#3730a3',
-                    }}
+            {totalWorkloadPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid #f1f5f9', fontSize: '0.75rem' }}>
+                <span style={{ color: 'var(--color-slate-500)' }}>
+                  Page {workloadPage} of {totalWorkloadPages} ({employeeWorkloads.length} employees)
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={workloadPage <= 1}
+                    onClick={() => setWorkloadPage((prev: number) => Math.max(1, prev - 1))}
                   >
-                    {emp.activeLoad} Active Tickets
-                  </span>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={workloadPage >= totalWorkloadPages}
+                    onClick={() => setWorkloadPage((prev: number) => Math.min(totalWorkloadPages, prev + 1))}
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

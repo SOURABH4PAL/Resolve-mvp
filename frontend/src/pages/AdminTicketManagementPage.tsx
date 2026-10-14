@@ -39,6 +39,7 @@ export const AdminTicketManagementPage: React.FC = () => {
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [targetEmployeeId, setTargetEmployeeId] = useState('');
+  const [reassignEmpSearch, setReassignEmpSearch] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
 
@@ -178,6 +179,7 @@ export const AdminTicketManagementPage: React.FC = () => {
     e.stopPropagation();
     setSelectedTicket(ticket);
     setTargetEmployeeId(ticket.assigned_to || employees[0]?.id || '');
+    setReassignEmpSearch('');
     setReassignError(null);
     setReassignModalOpen(true);
   };
@@ -572,6 +574,20 @@ export const AdminTicketManagementPage: React.FC = () => {
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6, color: 'var(--color-slate-700)' }}>
                 Select Responsible Employee
               </label>
+              <input
+                type="text"
+                placeholder="Search employee by name, email, or responsibilities..."
+                value={reassignEmpSearch}
+                onChange={e => setReassignEmpSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid var(--color-slate-300)',
+                  fontSize: '0.825rem',
+                  marginBottom: 8,
+                }}
+              />
               <select
                 value={targetEmployeeId}
                 onChange={e => setTargetEmployeeId(e.target.value)}
@@ -584,11 +600,22 @@ export const AdminTicketManagementPage: React.FC = () => {
                   backgroundColor: '#ffffff',
                 }}
               >
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.email}) — {emp.responsibilities?.join(', ') || 'General Employee'}
-                  </option>
-                ))}
+                {employees
+                  .filter(emp => {
+                    if (!reassignEmpSearch.trim()) return true;
+                    const term = reassignEmpSearch.toLowerCase();
+                    const respStr = (emp.responsibilities || []).join(' ').toLowerCase();
+                    return (
+                      emp.name.toLowerCase().includes(term) ||
+                      emp.email.toLowerCase().includes(term) ||
+                      respStr.includes(term)
+                    );
+                  })
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.email}) — {emp.responsibilities?.join(', ') || 'General Employee'}
+                    </option>
+                  ))}
               </select>
               <p style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 6 }}>
                 The selected employee will receive this ticket in their &quot;Assigned To Me&quot; queue.

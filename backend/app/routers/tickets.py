@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.ticket import TicketPriority, TicketStatus
-from app.schemas.ticket import TicketCreate, TicketRead, TicketStatusUpdate, TicketResolve, TicketAssign
+from app.schemas.ticket import TicketCreate, TicketRead, TicketStatusUpdate, TicketResolve, TicketAssign, TicketReopen
 from app.schemas.pagination import PaginatedResponse
 from app.dependencies import get_current_user, require_role
 from app.services import ticket_service
@@ -127,3 +127,15 @@ def close_ticket(
 ):
     """Close ticket. Creator only after RESOLVED; SUPER_ADMIN can close any ticket."""
     return ticket_service.close_ticket(db, ticket_id, current_user)
+
+
+@router.put("/{ticket_id}/reopen", response_model=TicketRead)
+def reopen_ticket(
+    ticket_id: str,
+    reopen_in: Optional[TicketReopen] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reopen ticket. Creator or SUPER_ADMIN only from RESOLVED or CLOSED status."""
+    reason = reopen_in.reason if reopen_in else None
+    return ticket_service.reopen_ticket(db, ticket_id, current_user, reason=reason)

@@ -1,10 +1,12 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTickets } from '../../context/TicketContext';
 import { Bell, LogOut, User as UserIcon, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const { unreadNotificationCount } = useTickets();
   const navigate = useNavigate();
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
@@ -95,8 +97,33 @@ export const Navbar: React.FC = () => {
           onClick={handleNotificationClick}
           title={isSuperAdmin ? 'System Activity & Audit' : 'Notifications'}
           aria-label="View notifications"
+          style={{ position: 'relative' }}
         >
           <Bell size={19} />
+          {unreadNotificationCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                minWidth: 16,
+                height: 16,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
+                border: '2px solid #ffffff',
+                lineHeight: 1,
+              }}
+            >
+              {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+            </span>
+          )}
         </button>
 
         {/* Profile */}

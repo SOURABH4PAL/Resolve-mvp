@@ -3,7 +3,7 @@ import { BookOpen, Search, Eye, ThumbsUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { FaqItem } from '../types';
-import { getFaqs, addFaq, deleteFaq } from '../utils/faqStorage';
+import { api } from '../api/client';
 import { useTickets } from '../context/TicketContext';
 
 export const AdminFaqPage: React.FC = () => {
@@ -11,6 +11,8 @@ export const AdminFaqPage: React.FC = () => {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Form state
   const [question, setQuestion] = useState('');
@@ -18,8 +20,20 @@ export const AdminFaqPage: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
   const [categoryName, setCategoryName] = useState('');
 
+  const loadFaqs = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.get<FaqItem[]>('/faqs');
+      setFaqs(data || []);
+    } catch (err) {
+      console.error('Failed to load FAQs:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setFaqs(getFaqs());
+    loadFaqs();
   }, []);
 
   const handleOpenAddModal = () => {
@@ -30,26 +44,38 @@ export const AdminFaqPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleAddFaq = (e: React.FormEvent) => {
+  const handleAddFaq = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!question.trim() || !answer.trim()) return;
 
-    const updated = addFaq({
-      question: question.trim(),
-      answer: answer.trim(),
-      department_name: departmentName || 'General',
-      category_name: categoryName || 'General',
-    });
-
-    setFaqs(updated);
-    setModalOpen(false);
+    setIsSaving(true);
+    try {
+      const created = await api.post<FaqItem>('/faqs', {
+        question: question.trim(),
+        answer: answer.trim(),
+        department_name: departmentName || 'General',
+        category_name: categoryName || 'General',
+      });
+      setFaqs(prev => [created, ...prev]);
+      setModalOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save FAQ.';
+      alert(msg);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteFaq = (id: string, e: React.MouseEvent) => {
+  const handleDeleteFaq = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this FAQ article?')) {
-      const updated = deleteFaq(id);
-      setFaqs(updated);
+      try {
+        await api.delete('/faqs/' + id);
+        setFaqs(prev => prev.filter(f => f.id !== id));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to delete FAQ.';
+        alert(msg);
+      }
     }
   };
 
@@ -201,7 +227,7 @@ export const AdminFaqPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleAddFaq}>
+            <Button variant="primary" onClick={handleAddFaq} isLoading={isSaving}>
               Save FAQ
             </Button>
           </div>

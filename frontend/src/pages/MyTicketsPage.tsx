@@ -8,6 +8,7 @@ import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Table, Column } from '../components/common/Table';
 import { TicketCard } from '../components/common/TicketCard';
 import { Ticket } from '../types';
+import { formatDate } from '../utils/formatters';
 import {
   PlusCircle,
   Search,
@@ -175,10 +176,7 @@ export const MyTicketsPage: React.FC = () => {
       sortable: true,
       render: ticket => (
         <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
-          {new Date(ticket.updated_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          })}
+          {formatDate(ticket.updated_at)}
         </span>
       ),
     },

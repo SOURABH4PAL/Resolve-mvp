@@ -8,7 +8,7 @@ from app.models.ticket_attachment import TicketAttachment
 from app.models.notification import Notification
 from app.models.sla_policy import SlaPolicy
 from app.models.ticket_escalation import TicketEscalation, EscalationStatus
-from app.models.faq import FAQ
+from app.models.faq import FAQ, FAQVote
 from app.models.support_team import SupportTeam
 from app.models.routing_rule import RoutingRule
 
@@ -28,6 +28,7 @@ __all__ = [
     "TicketEscalation",
     "EscalationStatus",
     "FAQ",
+    "FAQVote",
     "SupportTeam",
     "RoutingRule",
 ]

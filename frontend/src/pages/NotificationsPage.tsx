@@ -4,8 +4,11 @@ import { Bell, CheckCircle2, Ticket, Check, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
 import { NotificationItem } from '../types';
 import { Button } from '../components/common/Button';
+import { useTickets } from '../context/TicketContext';
+import { formatDateTime } from '../utils/formatters';
 
 export const NotificationsPage: React.FC = () => {
+  const { refreshNotifications } = useTickets();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filter, setFilter] = useState<'ALL' | 'UNREAD'>('ALL');
@@ -34,6 +37,7 @@ export const NotificationsPage: React.FC = () => {
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
       );
+      await refreshNotifications();
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
     }
@@ -43,6 +47,7 @@ export const NotificationsPage: React.FC = () => {
     try {
       await api.put('/notifications/read-all');
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      await refreshNotifications();
     } catch (err) {
       console.error('Failed to mark all as read:', err);
     }
@@ -207,7 +212,7 @@ export const NotificationsPage: React.FC = () => {
                         marginTop: 6,
                       }}
                     >
-                      {new Date(notif.created_at).toLocaleString()}
+                      {formatDateTime(notif.created_at)}
                     </div>
                   </div>
                 </div>

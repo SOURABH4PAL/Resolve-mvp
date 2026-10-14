@@ -14,6 +14,7 @@ from app.models.notification import Notification
 from app.models.category import Category
 from app.models.subcategory import Subcategory
 from app.models.department import Department
+from app.models.routing_rule import RoutingRule
 from app.schemas.ticket import TicketCreate, TicketStatusUpdate, TicketResolve, TicketAssign
 from app.schemas.ticket_comment import TicketCommentCreate
 from app.utils.ticket_number import generate_ticket_number
@@ -65,8 +66,9 @@ VALID_TRANSITIONS: dict[TicketStatus, set[TicketStatus]] = {
     TicketStatus.ASSIGNED: {TicketStatus.IN_PROGRESS, TicketStatus.CLOSED},
     TicketStatus.IN_PROGRESS: {TicketStatus.WAITING_FOR_USER, TicketStatus.RESOLVED, TicketStatus.CLOSED},
     TicketStatus.WAITING_FOR_USER: {TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED, TicketStatus.CLOSED},
-    TicketStatus.RESOLVED: {TicketStatus.CLOSED, TicketStatus.IN_PROGRESS},   # admin can reopen; creator closes
-    TicketStatus.CLOSED: set(),   # terminal — no further transitions
+    TicketStatus.RESOLVED: {TicketStatus.CLOSED, TicketStatus.IN_PROGRESS, TicketStatus.REOPENED},
+    TicketStatus.CLOSED: {TicketStatus.REOPENED},
+    TicketStatus.REOPENED: {TicketStatus.IN_PROGRESS, TicketStatus.ASSIGNED, TicketStatus.RESOLVED, TicketStatus.CLOSED},
 }
 
 
@@ -126,20 +128,40 @@ def create_ticket(db: Session, ticket_in: TicketCreate, current_user: User) -> T
 
     ticket_num = generate_ticket_number(db)
 
-    # Check department responsible employee for auto-routing
+    # Auto-routing precedence: subcategory rule -> category rule -> department lead
     department = db.query(Department).filter(Department.id == category.department_id).first()
     assigned_to_id = None
     initial_status = TicketStatus.OPEN
-
     assignee = None
-    if department and department.responsible_user_id:
+
+    if ticket_in.subcategory_id:
+        sub_rule = db.query(RoutingRule).filter(
+            RoutingRule.subcategory_id == ticket_in.subcategory_id,
+            RoutingRule.is_active == True,
+            RoutingRule.assigned_user_id.isnot(None),
+        ).first()
+        if sub_rule and sub_rule.assigned_user_id:
+            assignee = db.query(User).filter(User.id == sub_rule.assigned_user_id, User.is_active == True).first()
+
+    if not assignee:
+        cat_rule = db.query(RoutingRule).filter(
+            RoutingRule.category_id == ticket_in.category_id,
+            (RoutingRule.subcategory_id.is_(None)) | (RoutingRule.subcategory_id == ""),
+            RoutingRule.is_active == True,
+            RoutingRule.assigned_user_id.isnot(None),
+        ).first()
+        if cat_rule and cat_rule.assigned_user_id:
+            assignee = db.query(User).filter(User.id == cat_rule.assigned_user_id, User.is_active == True).first()
+
+    if not assignee and department and department.responsible_user_id:
         assignee = db.query(User).filter(
             User.id == department.responsible_user_id,
             User.is_active == True
         ).first()
-        if assignee:
-            assigned_to_id = assignee.id
-            initial_status = TicketStatus.ASSIGNED
+
+    if assignee:
+        assigned_to_id = assignee.id
+        initial_status = TicketStatus.ASSIGNED
 
     now = datetime.utcnow()
     prio = ticket_in.priority if ticket_in.priority else TicketPriority.MEDIUM
@@ -432,6 +454,17 @@ def update_ticket_status(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="You can only close a ticket that is in RESOLVED status",
                 )
+    elif new_status == TicketStatus.REOPENED:
+        if not is_admin and not is_creator:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the ticket creator or SUPER_ADMIN can reopen tickets",
+            )
+        if ticket.status not in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="You can only reopen a ticket that is in RESOLVED or CLOSED status",
+            )
 
     # --- lifecycle validation ---
     _assert_transition_allowed(ticket.status, new_status)
@@ -458,6 +491,17 @@ def update_ticket_status(
                 user_id=ticket.created_by,
                 title=f"Ticket Closed: {ticket.ticket_number}",
                 message=f"Your ticket '{ticket.title}' has been marked as CLOSED.",
+                ticket_id=ticket.id,
+            )
+    elif new_status == TicketStatus.REOPENED:
+        ticket.closed_at = None
+        ticket.resolved_at = None
+        if ticket.assigned_to and ticket.assigned_to != current_user.id:
+            _send_notification(
+                db,
+                user_id=ticket.assigned_to,
+                title=f"Ticket Reopened: {ticket.ticket_number}",
+                message=f"Ticket '{ticket.title}' has been reopened by {current_user.name}.",
                 ticket_id=ticket.id,
             )
 
@@ -544,6 +588,50 @@ def close_ticket(db: Session, ticket_id: str, current_user: User) -> Ticket:
             user_id=ticket.created_by,
             title=f"Ticket Closed: {ticket.ticket_number}",
             message=f"Your ticket '{ticket.title}' has been closed.",
+            ticket_id=ticket.id,
+        )
+
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+
+def reopen_ticket(
+    db: Session, ticket_id: str, current_user: User, reason: Optional[str] = None
+) -> Ticket:
+    """Mark ticket as REOPENED. Creator or SUPER_ADMIN only."""
+    ticket = get_ticket_by_id(db, ticket_id, current_user)
+
+    is_admin = current_user.role == UserRole.SUPER_ADMIN
+    is_creator = ticket.created_by == current_user.id
+
+    if not is_admin and not is_creator:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the ticket creator or SUPER_ADMIN can reopen tickets",
+        )
+
+    if ticket.status not in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="You can only reopen a ticket that is in RESOLVED or CLOSED status",
+        )
+
+    _assert_transition_allowed(ticket.status, TicketStatus.REOPENED)
+
+    ticket.status = TicketStatus.REOPENED
+    ticket.closed_at = None
+    ticket.resolved_at = None
+
+    comment_msg = f"Ticket reopened: {reason.strip()}" if reason and reason.strip() else "Ticket reopened by employee."
+    _add_system_comment(db, ticket.id, current_user.id, comment_msg)
+
+    if ticket.assigned_to and ticket.assigned_to != current_user.id:
+        _send_notification(
+            db,
+            user_id=ticket.assigned_to,
+            title=f"Ticket Reopened: {ticket.ticket_number}",
+            message=f"Ticket '{ticket.title}' has been reopened by {current_user.name}.",
             ticket_id=ticket.id,
         )
 

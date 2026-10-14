@@ -46,6 +46,10 @@ class TicketResolve(BaseModel):
     resolution_notes: Optional[str] = None
 
 
+class TicketReopen(BaseModel):
+    reason: Optional[str] = None
+
+
 class TicketRead(BaseModel):
     id: str
     ticket_number: str
