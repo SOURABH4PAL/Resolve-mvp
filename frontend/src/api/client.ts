@@ -22,6 +22,23 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   isFormData?: boolean;
 }
 
+export function getBaseApiUrl(): string {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://resolvehub-backend-7s5x.onrender.com';
+  }
+  return '';
+}
+
+export function buildApiUrl(endpoint: string): string {
+  const baseUrl = getBaseApiUrl();
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const apiPath = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
+  return baseUrl ? `${baseUrl}${apiPath}` : apiPath;
+}
+
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
   const headers: Record<string, string> = {
@@ -42,10 +59,7 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     body = JSON.stringify(options.body);
   }
 
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const apiPath = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
-  const url = baseUrl ? `${baseUrl}${apiPath}` : apiPath;
+  const url = buildApiUrl(endpoint);
 
   try {
     const response = await fetch(url, {
@@ -121,10 +135,7 @@ export const api = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const apiPath = normalizedEndpoint.startsWith('/api') ? normalizedEndpoint : `/api${normalizedEndpoint}`;
-    const url = baseUrl ? `${baseUrl}${apiPath}` : apiPath;
+    const url = buildApiUrl(endpoint);
 
     const response = await fetch(url, { method: 'GET', headers });
     if (!response.ok) {

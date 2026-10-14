@@ -73,12 +73,25 @@ async def validate_secret_key() -> None:
 
 
 # CORS Middleware (supports local development, Render, Vercel, and custom domains)
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+    "https://resolvehub-frontend-n8xy.onrender.com",
+    "https://resolve-mvp-rust.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r".*",
+    allow_origins=origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -202,16 +215,14 @@ app.include_router(dashboard_router, prefix=settings.API_PREFIX)
 # Create Upload Directory
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-# Mount Frontend static directory
-frontend_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend"))
-
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
-else:
-    @app.get("/")
-    def root():
-        return {
-            "name": settings.PROJECT_NAME,
-            "status": "online",
-            "docs": "/docs"
-        }
+@app.get("/", tags=["Root"])
+def root():
+    """Root endpoint providing service status and links to documentation."""
+    return {
+        "name": settings.PROJECT_NAME,
+        "status": "online",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+        "environment": settings.ENVIRONMENT,
+    }
