@@ -5,6 +5,8 @@ import { PriorityBadge } from './PriorityBadge';
 import { MessageSquare, Paperclip, User, Building, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { formatDate } from '../../utils/formatters';
+
 export interface TicketCardProps {
   ticket: Ticket;
   onClick?: () => void;
@@ -18,19 +20,6 @@ export const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick }) => {
       onClick();
     } else {
       navigate(`/tickets/${ticket.id}`);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateString;
     }
   };
 

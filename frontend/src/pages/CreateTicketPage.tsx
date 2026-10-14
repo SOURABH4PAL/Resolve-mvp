@@ -189,7 +189,7 @@ export const CreateTicketPage: React.FC = () => {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
+      <div className="create-ticket-grid">
         {/* Ticket Form */}
         <div className="card">
           <div className="card-header">
@@ -208,7 +208,7 @@ export const CreateTicketPage: React.FC = () => {
               />
 
               {/* Department & Category Selects */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="form-grid-2">
                 <Select
                   label="Target Department"
                   placeholder="-- Select Department --"
@@ -252,7 +252,7 @@ export const CreateTicketPage: React.FC = () => {
               {/* Priority Select */}
               <div className="form-group" style={{ marginTop: 16 }}>
                 <label className="form-label required">Priority Level</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <div className="priority-selector-grid">
                   {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as TicketPriority[]).map(p => {
                     const isSelected = priority === p;
                     return (

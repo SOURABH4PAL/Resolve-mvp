@@ -3,6 +3,7 @@ import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { Table, Column } from '../components/common/Table';
 import { api } from '../api/client';
+import { formatDateTime } from '../utils/formatters';
 import {
   Clock,
   AlertTriangle,
@@ -208,7 +209,7 @@ export const AdminSlaPage: React.FC = () => {
       width: '160px',
       render: e => (
         <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-500)' }}>
-          {new Date(e.created_at).toLocaleString()}
+          {formatDateTime(e.created_at)}
         </span>
       ),
     },

@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTickets } from '../context/TicketContext';
 import { Input } from '../components/common/Input';
+import { formatDate } from '../utils/formatters';
 import {
   User as UserIcon,
   Mail,
@@ -226,7 +227,7 @@ export const ProfilePage: React.FC = () => {
 
               <Input
                 label="Account Created"
-                value={new Date(currentUser.created_at).toLocaleDateString()}
+                value={formatDate(currentUser.created_at)}
                 disabled
                 leftIcon={<Calendar size={16} />}
               />

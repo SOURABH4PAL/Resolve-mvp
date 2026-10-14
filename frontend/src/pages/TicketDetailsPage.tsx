@@ -464,7 +464,7 @@ export const TicketDetailsPage: React.FC = () => {
       </div>
 
       {/* Main Grid: Details + Conversation vs Sidebar Meta */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+      <div className="ticket-detail-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Issue Description Card */}
           <div className="card">

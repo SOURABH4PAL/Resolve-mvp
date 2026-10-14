@@ -1,11 +1,18 @@
-import React from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { useAuth } from '../../context/AuthContext';
 
 export const AppLayout: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   if (isLoading) {
     return (
@@ -31,9 +38,22 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      {/* Mobile Backdrop Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <Sidebar
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+      />
+
       <div className="main-wrapper">
-        <Navbar />
+        <Navbar onToggleMobileMenu={() => setIsMobileMenuOpen(prev => !prev)} />
         <main className="content-container">
           <Outlet />
         </main>
@@ -41,3 +61,4 @@ export const AppLayout: React.FC = () => {
     </div>
   );
 };
+

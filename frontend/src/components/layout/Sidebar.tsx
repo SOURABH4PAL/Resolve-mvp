@@ -18,11 +18,17 @@ import {
   BarChart3,
   Settings,
   Ticket as TicketIcon,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTickets } from '../../context/TicketContext';
 
-export const Sidebar: React.FC = () => {
+export interface SidebarProps {
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
   const { currentUser } = useAuth();
   const { tickets, unreadNotificationCount } = useTickets();
 
@@ -48,31 +54,61 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="app-sidebar">
+    <aside className={`app-sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
       {/* Brand Header */}
-      <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <Layers size={18} />
+      <div
+        className="sidebar-header"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 14px',
+          gap: 6,
+        }}
+      >
+        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '1.05rem', minWidth: 0 }}>
+          <div className="sidebar-logo-icon" style={{ width: 28, height: 28, minWidth: 28 }}>
+            <Layers size={16} />
           </div>
-          <span>ResolveHub</span>
+          <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>ResolveHub</span>
         </div>
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: '0.675rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: isSuperAdmin ? '#f43f5e' : 'var(--color-primary-400)',
-          }}
-        >
-          {isSuperAdmin ? 'Admin Management' : 'Employee Portal'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div
+            style={{
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              color: isSuperAdmin ? '#b91c1c' : 'var(--color-primary-700)',
+              backgroundColor: isSuperAdmin ? '#fef2f2' : 'var(--color-primary-50)',
+              border: `1px solid ${isSuperAdmin ? '#fecaca' : 'var(--color-primary-200)'}`,
+              padding: '2px 5px',
+              borderRadius: 4,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {isSuperAdmin ? 'Admin Management' : 'Employee Portal'}
+          </div>
+          <button
+            className="mobile-sidebar-close"
+            onClick={onCloseMobile}
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
       </div>
 
       {/* Nav List */}
-      <nav className="sidebar-nav">
+      <nav
+        className="sidebar-nav"
+        onClick={e => {
+          if ((e.target as HTMLElement).closest('.nav-item')) {
+            onCloseMobile?.();
+          }
+        }}
+      >
         {isSuperAdmin ? (
           /* =========================================================
              SUPER ADMIN NAVIGATION (System Management First)
@@ -122,15 +158,7 @@ export const Sidebar: React.FC = () => {
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               <FolderTree size={18} />
-              <span>Categories & Subs</span>
-            </NavLink>
-
-            <NavLink
-              to="/admin/routing"
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Route size={18} />
-              <span>Responsibility & Routing</span>
+              <span>Categories &amp; Responsibilities</span>
             </NavLink>
 
             <div className="nav-section-title">Operations & Knowledge</div>
@@ -141,14 +169,6 @@ export const Sidebar: React.FC = () => {
             >
               <Clock size={18} />
               <span>SLA & Escalation</span>
-            </NavLink>
-
-            <NavLink
-              to="/admin/activity"
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Activity size={18} />
-              <span>Activity & Audit</span>
             </NavLink>
 
             <NavLink

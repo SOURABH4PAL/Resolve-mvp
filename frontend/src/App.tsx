@@ -245,11 +245,7 @@ export const App: React.FC = () => {
               />
               <Route
                 path="/admin/routing"
-                element={
-                  <RoleRoute allowedRole="SUPER_ADMIN">
-                    <AdminRoutingPage />
-                  </RoleRoute>
-                }
+                element={<Navigate to="/admin/categories" replace />}
               />
               <Route
                 path="/admin/sla"

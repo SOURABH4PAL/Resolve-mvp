@@ -255,24 +255,15 @@ export const AdminEmployeeManagementPage: React.FC = () => {
 
   const columns: Column<User>[] = [
     {
-      key: 'employee_id',
-      header: 'Employee ID',
-      width: '120px',
-      sortable: true,
-      render: emp => (
-        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-primary-600)' }}>
-          {emp.employee_id}
-        </span>
-      ),
-    },
-    {
       key: 'name',
       header: 'Employee & Email',
       sortable: true,
       render: emp => (
         <div>
           <div style={{ fontWeight: 600, color: 'var(--color-slate-900)' }}>{emp.name}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>{emp.email}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
+            {emp.email}
+          </div>
         </div>
       ),
     },
@@ -412,7 +403,7 @@ export const AdminEmployeeManagementPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: '100%', maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
       {/* Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>

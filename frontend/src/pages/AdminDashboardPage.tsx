@@ -5,7 +5,8 @@ import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { Table, Column } from '../components/common/Table';
-import { Ticket } from '../types';
+import { Ticket, PaginatedResponse } from '../types';
+import { api } from '../api/client';
 import {
   Ticket as TicketIcon,
   Clock,
@@ -27,7 +28,40 @@ export const AdminDashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [workloadPage, setWorkloadPage] = useState(1);
-  const workloadPageSize = 6;
+  const workloadPageSize = 10;
+
+  // Server-side paginated recent tickets
+  const [recentTicketsPage, setRecentTicketsPage] = useState(1);
+  const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
+  const [recentTicketsTotal, setRecentTicketsTotal] = useState(0);
+  const [recentTicketsTotalPages, setRecentTicketsTotalPages] = useState(1);
+  const [isLoadingRecentTickets, setIsLoadingRecentTickets] = useState(false);
+
+  const fetchRecentTickets = React.useCallback(async (page: number) => {
+    setIsLoadingRecentTickets(true);
+    try {
+      const res = await api.get<PaginatedResponse<Ticket>>(`/tickets?envelope=true&page=${page}&page_size=10&sort_by=created_at&sort_order=desc`);
+      if (res && Array.isArray(res.items)) {
+        setRecentTickets(res.items);
+        setRecentTicketsTotal(res.total);
+        setRecentTicketsTotalPages(res.total_pages || Math.ceil(res.total / 10) || 1);
+      } else if (Array.isArray(res)) {
+        setRecentTickets((res as Ticket[]).slice(0, 10));
+        setRecentTicketsTotal((res as Ticket[]).length);
+        setRecentTicketsTotalPages(Math.ceil((res as Ticket[]).length / 10) || 1);
+      }
+    } catch {
+      setRecentTickets(tickets.slice((page - 1) * 10, page * 10));
+      setRecentTicketsTotal(tickets.length);
+      setRecentTicketsTotalPages(Math.ceil(tickets.length / 10) || 1);
+    } finally {
+      setIsLoadingRecentTickets(false);
+    }
+  }, [tickets]);
+
+  React.useEffect(() => {
+    fetchRecentTickets(recentTicketsPage);
+  }, [recentTicketsPage, fetchRecentTickets]);
 
   // Metrics
   const totalTickets = tickets.length;
@@ -487,7 +521,7 @@ export const AdminDashboardPage: React.FC = () => {
                 Responsible employees handling category queues
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/admin/routing')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/admin/categories')}>
               Configure Routing
             </Button>
           </div>
@@ -505,22 +539,23 @@ export const AdminDashboardPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '10px 12px',
+                    padding: '10px 14px',
                     borderRadius: 8,
                     backgroundColor: '#f8fafc',
                     border: '1px solid #e2e8f0',
+                    gap: 12,
                   }}
                 >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-slate-900)' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-slate-900)', wordBreak: 'break-word' }}>
                         {emp.name}
                       </span>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)' }}>
+                      <span style={{ fontSize: '0.725rem', color: 'var(--color-slate-400)', wordBreak: 'break-all' }}>
                         ({emp.email})
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 2, wordBreak: 'break-word' }}>
                       Responsible for:{' '}
                       <strong style={{ color: emp.responsibilities.length > 0 ? 'var(--color-primary-700)' : 'var(--color-slate-400)' }}>
                         {emp.responsibilities.length > 0 ? emp.responsibilities.join(', ') : 'None'}
@@ -528,12 +563,14 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'right' }}>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
                     <span
                       style={{
+                        display: 'inline-block',
+                        whiteSpace: 'nowrap',
                         fontSize: '0.75rem',
                         fontWeight: 700,
-                        padding: '3px 8px',
+                        padding: '4px 10px',
                         borderRadius: 12,
                         backgroundColor: emp.activeLoad > 2 ? '#fee2e2' : '#e0e7ff',
                         color: emp.activeLoad > 2 ? '#991b1b' : '#3730a3',
@@ -658,10 +695,17 @@ export const AdminDashboardPage: React.FC = () => {
 
         <Table<Ticket>
           columns={columns}
-          data={tickets.slice(0, 10)}
-          isLoading={isLoadingTickets}
+          data={recentTickets}
+          isLoading={isLoadingRecentTickets}
           emptyMessage="No tickets recorded."
           onRowClick={ticket => navigate(`/tickets/${ticket.ticket_number}`)}
+          pagination={{
+            currentPage: recentTicketsPage,
+            totalPages: recentTicketsTotalPages,
+            totalRecords: recentTicketsTotal,
+            pageSize: 10,
+            onPageChange: setRecentTicketsPage,
+          }}
         />
       </div>
     </div>

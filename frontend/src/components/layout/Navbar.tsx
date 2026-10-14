@@ -1,10 +1,14 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTickets } from '../../context/TicketContext';
-import { Bell, LogOut, User as UserIcon, Shield } from 'lucide-react';
+import { Bell, LogOut, User as UserIcon, Shield, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export const Navbar: React.FC = () => {
+export interface NavbarProps {
+  onToggleMobileMenu?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
   const { currentUser, logout } = useAuth();
   const { unreadNotificationCount } = useTickets();
   const navigate = useNavigate();
@@ -30,9 +34,18 @@ export const Navbar: React.FC = () => {
   return (
     <header className="app-navbar">
       <div className="navbar-left">
+        <button
+          className="mobile-menu-btn"
+          onClick={onToggleMobileMenu}
+          aria-label="Toggle navigation menu"
+        >
+          <Menu size={20} />
+        </button>
+
         <h2 className="navbar-title">
           ResolveHub{' '}
           <span
+            className="navbar-subtitle"
             style={{
               fontSize: '0.75rem',
               fontWeight: 500,
@@ -91,40 +104,42 @@ export const Navbar: React.FC = () => {
           </div>
         )}
 
-        {/* Notification Icon */}
-        <button
-          className="icon-button"
-          onClick={handleNotificationClick}
-          title={isSuperAdmin ? 'System Activity & Audit' : 'Notifications'}
-          aria-label="View notifications"
-          style={{ position: 'relative' }}
-        >
-          <Bell size={19} />
-          {unreadNotificationCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: 2,
-                right: 2,
-                backgroundColor: '#ef4444',
-                color: '#ffffff',
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                minWidth: 16,
-                height: 16,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 3px',
-                border: '2px solid #ffffff',
-                lineHeight: 1,
-              }}
-            >
-              {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-            </span>
-          )}
-        </button>
+        {/* Notification Icon (Employee Portal only) */}
+        {!isSuperAdmin && (
+          <button
+            className="icon-button"
+            onClick={handleNotificationClick}
+            title="Notifications"
+            aria-label="View notifications"
+            style={{ position: 'relative' }}
+          >
+            <Bell size={19} />
+            {unreadNotificationCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 3px',
+                  border: '2px solid #ffffff',
+                  lineHeight: 1,
+                }}
+              >
+                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Profile */}
         <button

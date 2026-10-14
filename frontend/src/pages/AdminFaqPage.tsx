@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Search, Eye, ThumbsUp, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Search, Eye, ThumbsUp, Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { FaqItem } from '../types';
@@ -11,8 +11,10 @@ export const AdminFaqPage: React.FC = () => {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingFaq, setEditingFaq] = useState<FaqItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Form state
   const [question, setQuestion] = useState('');
@@ -37,30 +39,65 @@ export const AdminFaqPage: React.FC = () => {
   }, []);
 
   const handleOpenAddModal = () => {
+    setEditingFaq(null);
     setQuestion('');
     setAnswer('');
     setDepartmentName(departments[0]?.name || 'IT Support');
     setCategoryName(categories[0]?.name || 'General');
+    setFormError(null);
     setModalOpen(true);
   };
 
-  const handleAddFaq = async (e: React.FormEvent) => {
+  const handleOpenEditModal = (faq: FaqItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingFaq(faq);
+    setQuestion(faq.question);
+    setAnswer(faq.answer);
+    setDepartmentName(faq.department_name || departments[0]?.name || 'IT Support');
+    setCategoryName(faq.category_name || categories[0]?.name || 'General');
+    setFormError(null);
+    setModalOpen(true);
+  };
+
+  const handleSaveFaq = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!question.trim() || !answer.trim()) return;
+    if (!question.trim()) {
+      setFormError('Question is required.');
+      return;
+    }
+    if (!answer.trim()) {
+      setFormError('Answer is required.');
+      return;
+    }
 
     setIsSaving(true);
+    setFormError(null);
+
+    const foundDept = departments.find(d => d.name === departmentName);
+    const foundCat = categories.find(c => c.name === categoryName);
+
+    const payload = {
+      question: question.trim(),
+      answer: answer.trim(),
+      department_id: foundDept?.id || undefined,
+      category_id: foundCat?.id || undefined,
+      department_name: departmentName || foundDept?.name || 'General',
+      category_name: categoryName || foundCat?.name || 'General',
+    };
+
     try {
-      const created = await api.post<FaqItem>('/faqs', {
-        question: question.trim(),
-        answer: answer.trim(),
-        department_name: departmentName || 'General',
-        category_name: categoryName || 'General',
-      });
-      setFaqs(prev => [created, ...prev]);
+      if (editingFaq) {
+        const updated = await api.put<FaqItem>(`/faqs/${editingFaq.id}`, payload);
+        setFaqs(prev => prev.map(f => (f.id === updated.id ? updated : f)));
+      } else {
+        const created = await api.post<FaqItem>('/faqs', payload);
+        setFaqs(prev => [created, ...prev]);
+      }
       setModalOpen(false);
+      setEditingFaq(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save FAQ.';
-      alert(msg);
+      setFormError(msg);
     } finally {
       setIsSaving(false);
     }
@@ -163,22 +200,40 @@ export const AdminFaqPage: React.FC = () => {
                   {faq.department_name} • {faq.category_name}
                 </span>
 
-                <button
-                  onClick={e => handleDeleteFaq(faq.id, e)}
-                  title="Delete FAQ"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    padding: 4,
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={e => handleOpenEditModal(faq, e)}
+                    title="Edit FAQ"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-slate-600)',
+                      cursor: 'pointer',
+                      padding: 4,
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Edit2 size={15} />
+                  </button>
+                  <button
+                    onClick={e => handleDeleteFaq(faq.id, e)}
+                    title="Delete FAQ"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      padding: 4,
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
 
               <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-slate-900)' }}>
@@ -212,28 +267,55 @@ export const AdminFaqPage: React.FC = () => {
           ))
         ) : (
           <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-slate-500)', gridColumn: '1 / -1' }}>
-            No FAQs found. Click "Add FAQ Article" to create one.
+            No FAQs found. Click &ldquo;Add FAQ Article&rdquo; to create one.
           </div>
         )}
       </div>
 
-      {/* Add FAQ Modal */}
+      {/* Add / Edit FAQ Modal */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Add New FAQ Article"
+        onClose={() => {
+          setModalOpen(false);
+          setEditingFaq(null);
+        }}
+        title={editingFaq ? 'Edit FAQ Article' : 'Add New FAQ Article'}
         footer={
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setModalOpen(false);
+                setEditingFaq(null);
+              }}
+            >
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleAddFaq} isLoading={isSaving}>
-              Save FAQ
+            <Button variant="primary" onClick={handleSaveFaq} isLoading={isSaving}>
+              {editingFaq ? 'Save Changes' : 'Create FAQ'}
             </Button>
           </div>
         }
       >
-        <form onSubmit={handleAddFaq} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={handleSaveFaq} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {formError && (
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: 6,
+                backgroundColor: '#fef2f2',
+                color: '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: '0.85rem',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>
               Question *
