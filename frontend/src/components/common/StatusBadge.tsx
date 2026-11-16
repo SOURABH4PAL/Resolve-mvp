@@ -1,13 +1,23 @@
 import React from 'react';
 import { TicketStatus } from '../../types';
-import { Clock, CheckCircle2, AlertCircle, CheckCheck, UserCheck, HelpCircle, RotateCcw } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, CheckCheck, UserCheck, HelpCircle, RotateCcw, Lock } from 'lucide-react';
 
 export interface StatusBadgeProps {
   status: TicketStatus;
+  isBlocked?: boolean;
   showIcon?: boolean;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showIcon = true }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, isBlocked = false, showIcon = true }) => {
+  if (isBlocked) {
+    return (
+      <span className="badge status-badge-blocked" style={{ backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+        {showIcon && <Lock size={12} />}
+        Blocked
+      </span>
+    );
+  }
+
   const getStatusConfig = () => {
     switch (status) {
       case 'OPEN':
@@ -48,7 +58,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, showIcon = tru
         };
       case 'REOPENED':
         return {
-          label: 'Reopened',
+          label: 'In Progress',
           className: 'status-badge-in_progress',
           icon: <RotateCcw size={12} />,
         };

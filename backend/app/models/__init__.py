@@ -6,6 +6,7 @@ from app.models.ticket import Ticket, TicketPriority, TicketStatus
 from app.models.ticket_comment import TicketComment
 from app.models.ticket_attachment import TicketAttachment
 from app.models.notification import Notification
+from app.models.ticket_journey import TicketJourney
 
 __all__ = [
     "User",
@@ -19,4 +20,5 @@ __all__ = [
     "TicketComment",
     "TicketAttachment",
     "Notification",
+    "TicketJourney",
 ]

@@ -5,6 +5,8 @@ import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
+import { SlaBadge } from '../components/common/SlaBadge';
+import { EmployeeName } from '../components/common/EmployeeName';
 import { Table, Column } from '../components/common/Table';
 import { TicketCard } from '../components/common/TicketCard';
 import { Ticket } from '../types';
@@ -144,26 +146,35 @@ export const MyTicketsPage: React.FC = () => {
     {
       key: 'priority',
       header: 'Priority',
-      width: '120px',
+      width: '100px',
       sortable: true,
       render: ticket => <PriorityBadge priority={ticket.priority} />,
     },
     {
       key: 'status',
       header: 'Status',
-      width: '140px',
+      width: '130px',
       sortable: true,
-      render: ticket => <StatusBadge status={ticket.status} />,
+      render: ticket => <StatusBadge status={ticket.status} isBlocked={ticket.is_blocked} />,
+    },
+    {
+      key: 'sla_status',
+      header: 'SLA Status',
+      width: '135px',
+      render: ticket => (
+        <SlaBadge slaStatus={ticket.sla_status} resolutionDueAt={ticket.resolution_due_at} />
+      ),
     },
     {
       key: 'assignee_name',
       header: 'Assigned To',
-      width: '170px',
+      width: '160px',
       render: ticket => {
-        const assigneeName = ticket.assignee?.name || (ticket.assigned_to ? 'Assigned' : 'Awaiting assignment');
-        return (
-          <span style={{ fontSize: '0.85rem', color: ticket.assignee ? 'var(--color-slate-700)' : 'var(--color-slate-400)' }}>
-            {assigneeName}
+        return ticket.assignee ? (
+          <EmployeeName name={ticket.assignee.name} email={ticket.assignee.email} maxWidth="140px" />
+        ) : (
+          <span style={{ fontSize: '0.8rem', color: 'var(--color-slate-400)' }}>
+            Awaiting assignment
           </span>
         );
       },

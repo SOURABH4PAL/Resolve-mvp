@@ -6,6 +6,7 @@ import { MOCK_USERS } from '../mock/mockData';
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User | null>;
   switchUserRole?: (role: UserRole) => void;
@@ -180,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         currentUser,
         isAuthenticated: !!currentUser,
+        isSuperAdmin: currentUser?.role === 'SUPER_ADMIN',
         isLoading,
         login,
         switchUserRole,

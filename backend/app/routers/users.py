@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.schemas.user import UserRead, UserStatusUpdate
+from app.models.department import Department
+from app.schemas.user import (
+    UserRead,
+    UserStatusUpdate,
+    BulkAssignDepartmentRequest,
+    BulkAssignDepartmentResponse,
+)
 from app.schemas.pagination import PaginatedResponse
 from app.dependencies import get_current_user, require_role
 
@@ -107,6 +113,52 @@ def list_employees(
             total_pages=total_pages,
         )
     return items
+
+
+@router.post("/bulk-assign-department", response_model=BulkAssignDepartmentResponse)
+def bulk_assign_department(
+    bulk_in: BulkAssignDepartmentRequest,
+    current_user: User = Depends(require_role(UserRole.SUPER_ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Assign multiple employees to a department in a single bulk operation (SUPER_ADMIN only)."""
+    dept = db.query(Department).filter(
+        Department.id == bulk_in.department_id,
+        Department.is_active == True,
+    ).first()
+    if not dept:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target department not found or is inactive",
+        )
+
+    if not bulk_in.user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one employee must be selected for bulk assignment",
+        )
+
+    successful_ids = []
+    failed_ids = []
+
+    for uid in bulk_in.user_ids:
+        user = db.query(User).filter(User.id == uid, User.role == UserRole.EMPLOYEE).first()
+        if user and user.is_active:
+            user.department_id = dept.id
+            successful_ids.append(user.id)
+        else:
+            failed_ids.append(uid)
+
+    db.commit()
+
+    return BulkAssignDepartmentResponse(
+        department_id=dept.id,
+        department_name=dept.name,
+        updated_count=len(successful_ids),
+        failed_count=len(failed_ids),
+        successful_user_ids=successful_ids,
+        failed_user_ids=failed_ids,
+    )
 
 
 @router.get("/{user_id}", response_model=UserRead)

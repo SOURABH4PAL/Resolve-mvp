@@ -1,6 +1,6 @@
 """
-Reports & Analytics API router for dashboard charts (Requirement 9).
-Provides live database aggregations for ticket statuses, priorities, department workloads, and trends.
+Reports & Analytics API router for dashboard charts (Requirement 9 & Phase 7).
+Provides live database aggregations for ticket statuses, priorities, department workloads, SLA performance, and trends.
 """
 
 from datetime import datetime, timedelta
@@ -18,6 +18,8 @@ from app.schemas.report import (
     DashboardSummary,
     DepartmentWorkload,
     DailyTrendPoint,
+    SlaSummary,
+    DepartmentSlaPerformance,
 )
 from app.dependencies import get_current_user
 
@@ -29,7 +31,7 @@ def get_dashboard_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Aggregate ticket counts, priority/status breakdowns, department workloads, and trends."""
+    """Aggregate ticket counts, priority/status breakdowns, department workloads, SLA metrics, and trends."""
     # 1. Status distribution
     status_counts = {s.value: 0 for s in TicketStatus}
     db_status_rows = db.query(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
@@ -44,9 +46,11 @@ def get_dashboard_report(
         key = pr.value if hasattr(pr, "value") else str(pr)
         priority_counts[key] = count
 
-    # 3. Department workload
+    # 3. Department workload & Department SLA
     dept_workloads = []
-    departments = db.query(Department).filter(Department.is_active == True).all()
+    dept_sla_list = []
+    departments = db.query(Department).filter(Department.is_active == True).order_by(Department.name.asc()).all()
+
     for dept in departments:
         tickets_in_dept = (
             db.query(Ticket)
@@ -67,6 +71,26 @@ def get_dashboard_report(
             )
         )
 
+        # Department SLA calculation
+        eligible_dept_tickets = [t for t in tickets_in_dept if t.resolution_due_at is not None]
+        dept_eligible = len(eligible_dept_tickets)
+        dept_breached = sum(1 for t in eligible_dept_tickets if t.sla_status == "BREACHED")
+        dept_within = sum(1 for t in eligible_dept_tickets if t.sla_status in ("IN_SLA", "AT_RISK"))
+        dept_compliance = (
+            round((dept_within / dept_eligible) * 100.0, 1) if dept_eligible > 0 else 100.0
+        )
+
+        dept_sla_list.append(
+            DepartmentSlaPerformance(
+                department_id=dept.id,
+                department_name=dept.name,
+                total_eligible=dept_eligible,
+                within_sla=dept_within,
+                breached=dept_breached,
+                compliance_percentage=dept_compliance,
+            )
+        )
+
     # 4. Summary metrics
     total_tickets = sum(status_counts.values())
     open_tickets = status_counts.get(TicketStatus.OPEN.value, 0)
@@ -78,6 +102,7 @@ def get_dashboard_report(
     resolved_tickets = status_counts.get(TicketStatus.RESOLVED.value, 0)
     closed_tickets = status_counts.get(TicketStatus.CLOSED.value, 0)
     unassigned = db.query(Ticket).filter(Ticket.assigned_to == None).count()
+    blocked_count = db.query(Ticket).filter(Ticket.is_blocked == True).count()
 
     resolved_objs = db.query(Ticket).filter(Ticket.resolved_at != None, Ticket.created_at != None).all()
     if resolved_objs:
@@ -93,29 +118,50 @@ def get_dashboard_report(
         resolved_tickets=resolved_tickets,
         closed_tickets=closed_tickets,
         unassigned_tickets=unassigned,
+        blocked_tickets=blocked_count,
         avg_resolution_hours=avg_res_hours,
     )
 
-    # 5. Recent trend (last 7 days)
+    # 5. Global SLA calculation
+    all_tickets = db.query(Ticket).all()
+    eligible_all = [t for t in all_tickets if t.resolution_due_at is not None]
+    total_eligible = len(eligible_all)
+    within_sla = sum(1 for t in eligible_all if t.sla_status in ("IN_SLA", "AT_RISK"))
+    at_risk = sum(1 for t in eligible_all if t.sla_status == "AT_RISK")
+    breached = sum(1 for t in eligible_all if t.sla_status == "BREACHED")
+    compliance_pct = round((within_sla / total_eligible) * 100.0, 1) if total_eligible > 0 else 100.0
+
+    global_sla = SlaSummary(
+        total_eligible=total_eligible,
+        within_sla=within_sla,
+        at_risk=at_risk,
+        breached=breached,
+        compliance_percentage=compliance_pct,
+    )
+
+    # 6. Recent trend (last 7 days)
     today = datetime.utcnow().date()
     trend_points = []
     for day_offset in range(6, -1, -1):
-        target_date = today - timedelta(days=day_offset)
-        next_date = target_date + timedelta(days=1)
-        created_c = db.query(Ticket).filter(
-            Ticket.created_at >= datetime.combine(target_date, datetime.min.time()),
-            Ticket.created_at < datetime.combine(next_date, datetime.min.time()),
-        ).count()
-        resolved_c = db.query(Ticket).filter(
-            Ticket.resolved_at != None,
-            Ticket.resolved_at >= datetime.combine(target_date, datetime.min.time()),
-            Ticket.resolved_at < datetime.combine(next_date, datetime.min.time()),
-        ).count()
+        day = today - timedelta(days=day_offset)
+        start_dt = datetime(day.year, day.month, day.day, 0, 0, 0)
+        end_dt = datetime(day.year, day.month, day.day, 23, 59, 59)
+
+        c_count = (
+            db.query(Ticket)
+            .filter(Ticket.created_at >= start_dt, Ticket.created_at <= end_dt)
+            .count()
+        )
+        r_count = (
+            db.query(Ticket)
+            .filter(Ticket.resolved_at >= start_dt, Ticket.resolved_at <= end_dt)
+            .count()
+        )
         trend_points.append(
             DailyTrendPoint(
-                date=target_date.isoformat(),
-                created_count=created_c,
-                resolved_count=resolved_c,
+                date=day.isoformat(),
+                created_count=c_count,
+                resolved_count=r_count,
             )
         )
 
@@ -125,4 +171,6 @@ def get_dashboard_report(
         priority_distribution=priority_counts,
         department_workload=dept_workloads,
         recent_trend=trend_points,
+        sla_summary=global_sla,
+        department_sla=dept_sla_list,
     )

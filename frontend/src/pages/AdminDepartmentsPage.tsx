@@ -7,7 +7,7 @@ import { Department } from '../types';
 import { Building2, Plus, Mail, CheckCircle2, FolderTree, Ticket as TicketIcon } from 'lucide-react';
 
 export const AdminDepartmentsPage: React.FC = () => {
-  const { departments, categories, tickets } = useTickets();
+  const { departments, categories, tickets, employees } = useTickets();
 
   const columns: Column<Department>[] = [
     {
@@ -27,7 +27,7 @@ export const AdminDepartmentsPage: React.FC = () => {
           </div>
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-slate-900)' }}>{dept.name}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>ID: {dept.id}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>Code: {dept.code || dept.id}</div>
           </div>
         </div>
       ),
@@ -41,6 +41,19 @@ export const AdminDepartmentsPage: React.FC = () => {
           <span>{dept.department_email || 'None'}</span>
         </div>
       ),
+    },
+    {
+      key: 'employees_count',
+      header: 'Assigned Employees',
+      width: '150px',
+      render: dept => {
+        const count = employees.filter(e => e.department_id === dept.id || e.department?.name === dept.name).length;
+        return (
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-slate-800)' }}>
+            {count} Members
+          </span>
+        );
+      },
     },
     {
       key: 'categories_count',

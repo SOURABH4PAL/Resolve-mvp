@@ -11,12 +11,13 @@ export interface User {
   created_at: string;
   updated_at: string;
   department?: Department | null;
-  responsibilities?: string[]; // e.g. ["Hardware", "Software"]
+  responsibilities?: string[];
 }
 
 export interface Department {
   id: string;
   name: string;
+  code?: string | null;
   department_email?: string | null;
   is_active: boolean;
   created_at: string;
@@ -80,23 +81,44 @@ export interface TicketComment {
   user?: User | null;
 }
 
+export interface TicketJourneyEvent {
+  id: string;
+  ticket_id: string;
+  actor_id?: string | null;
+  event_type: string;
+  description: string;
+  old_value?: string | null;
+  new_value?: string | null;
+  created_at: string;
+  actor?: User | null;
+}
+
 export interface Ticket {
   id: string;
   ticket_number: string;
   title: string;
   description: string;
   created_by: string;
-  category_id: string;
+  category_id?: string | null;
   subcategory_id?: string | null;
-  assigned_to?: string | null; // ID of the Responsible Employee
+  assigned_to?: string | null;
   priority: TicketPriority;
   status: TicketStatus;
+  is_blocked?: boolean;
+  blocked_reason?: string | null;
+  blocked_at?: string | null;
+  blocked_by_id?: string | null;
+  blocked_by?: User | null;
+  response_due_at?: string | null;
+  resolution_due_at?: string | null;
+  first_responded_at?: string | null;
   resolved_at?: string | null;
   closed_at?: string | null;
+  sla_status?: 'IN_SLA' | 'AT_RISK' | 'BREACHED' | 'NO_SLA' | string | null;
   created_at: string;
   updated_at: string;
   creator?: User | null;
-  assignee?: User | null; // The Responsible Employee
+  assignee?: User | null;
   category?: Category | null;
   subcategory?: Subcategory | null;
   comments?: TicketComment[];
@@ -122,10 +144,6 @@ export interface NotificationItem {
   ticket_number?: string;
 }
 
-/**
- * Responsibility & Routing Configuration Model
- * Super Admin configures: Department -> Category -> Responsible Employee
- */
 export interface CategoryResponsibility {
   id: string;
   department_id: string;
@@ -146,7 +164,7 @@ export interface EmployeeWorkloadItem {
   name: string;
   email: string;
   department: string;
-  responsibilities: string[]; // Category names they are responsible for
+  responsibilities: string[];
   assignedTicketsCount: number;
   resolvedTicketsCount: number;
 }
@@ -161,6 +179,49 @@ export interface EscalationItem {
   hours_elapsed: number;
   sla_limit_hours: number;
   status: TicketStatus;
+}
+
+export interface SlaSummary {
+  total_eligible: number;
+  within_sla: number;
+  at_risk: number;
+  breached: number;
+  compliance_percentage: number;
+}
+
+export interface DepartmentSlaPerformance {
+  department_id: string;
+  department_name: string;
+  total_eligible: number;
+  within_sla: number;
+  breached: number;
+  compliance_percentage: number;
+}
+
+export interface DepartmentWorkload {
+  department_id: string;
+  department_name: string;
+  total_tickets: number;
+  open_tickets: number;
+  resolved_tickets: number;
+}
+
+export interface DashboardReport {
+  summary: {
+    total_tickets: number;
+    open_tickets: number;
+    in_progress_tickets: number;
+    resolved_tickets: number;
+    closed_tickets: number;
+    unassigned_tickets: number;
+    blocked_tickets: number;
+    avg_resolution_hours: number;
+  };
+  status_distribution: Record<string, number>;
+  priority_distribution: Record<string, number>;
+  department_workload: DepartmentWorkload[];
+  sla_summary?: SlaSummary;
+  department_sla?: DepartmentSlaPerformance[];
 }
 
 export interface SlaRule {

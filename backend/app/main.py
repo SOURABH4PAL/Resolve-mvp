@@ -38,7 +38,8 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def validate_secret_key() -> None:
-    """Refuse to start in non-development environments with the default SECRET_KEY."""
+    """Validate secret key and verify database schema compatibility on startup."""
+    from app.database import ensure_schema_compatibility
     weak_defaults = {
         "change-this-to-a-random-secret-key-in-production",
         "secret",
@@ -55,6 +56,8 @@ async def validate_secret_key() -> None:
             "WARNING: Using a weak default SECRET_KEY. "
             "This is only acceptable in development. Set SECRET_KEY in production."
         )
+    ensure_schema_compatibility()
+
 
 
 # CORS Middleware (environment-driven, explicit origins without wildcard)
