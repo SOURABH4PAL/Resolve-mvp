@@ -32,3 +32,7 @@ Thumbs.db
 # Databases
 *.db
 *.sqlite3
+*.bak
+*.csv
+
+postman/ResolveHub_Local.postman_environment.json

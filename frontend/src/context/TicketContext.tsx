@@ -3,10 +3,12 @@ import {
   Ticket,
   Department,
   Category,
+  Subcategory,
   TicketPriority,
   TicketStatus,
   TicketComment,
   TicketAttachment,
+  TicketJourneyEvent,
   CategoryResponsibility,
   User,
 } from '../types';
@@ -15,10 +17,18 @@ import { useAuth } from './AuthContext';
 import {
   MOCK_DEPARTMENTS,
   MOCK_CATEGORIES,
-  MOCK_TICKETS,
   MOCK_RESPONSIBILITIES,
   MOCK_USERS,
 } from '../mock/mockData';
+
+export interface BulkAssignDepartmentResult {
+  department_id: string;
+  department_name: string;
+  updated_count: number;
+  failed_count: number;
+  successful_user_ids: string[];
+  failed_user_ids: string[];
+}
 
 interface TicketContextType {
   tickets: Ticket[];
@@ -29,14 +39,14 @@ interface TicketContextType {
   isLoadingTickets: boolean;
   isLoadingMasterData: boolean;
   error: string | null;
-  fetchTickets: () => Promise<void>;
+  fetchTickets: (params?: Record<string, any>) => Promise<void>;
   fetchMasterData: () => Promise<void>;
   getTicketById: (ticketId: string) => Promise<Ticket>;
   createTicket: (data: {
     title: string;
     description: string;
-    category_id: string;
-    subcategory_id?: string;
+    category_id?: string | null;
+    subcategory_id?: string | null;
     priority: TicketPriority;
   }) => Promise<Ticket>;
   updateTicketStatus: (ticketId: string, status: TicketStatus, comment?: string) => Promise<Ticket>;
@@ -44,6 +54,12 @@ interface TicketContextType {
   closeTicket: (ticketId: string) => Promise<Ticket>;
   reopenTicket: (ticketId: string, reason?: string) => Promise<Ticket>;
   assignTicket: (ticketId: string, employeeId: string, employeeName?: string) => Promise<void>;
+  blockTicket: (ticketId: string, reason: string) => Promise<Ticket>;
+  unblockTicket: (ticketId: string, reason?: string) => Promise<Ticket>;
+  getTicketJourney: (ticketId: string) => Promise<TicketJourneyEvent[]>;
+  bulkAssignDepartment: (userIds: string[], departmentId: string) => Promise<BulkAssignDepartmentResult>;
+  createCategory: (departmentId: string, name: string, description?: string) => Promise<Category>;
+  createSubcategory: (categoryId: string, name: string, description?: string) => Promise<Subcategory>;
   updateCategoryResponsibility: (
     responsibilityId: string,
     responsibleEmployeeId: string,
@@ -79,40 +95,46 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         api.get<Category[]>('/categories').catch(() => null),
         api.get<User[]>('/users').catch(() => null),
       ]);
-      if (deptList && deptList.length > 0) {
+      if (Array.isArray(deptList)) {
         setDepartments(deptList);
       }
-      if (catList && catList.length > 0) {
+      if (Array.isArray(catList)) {
         setCategories(catList);
       }
-      if (empList && empList.length > 0) {
+      if (Array.isArray(empList)) {
         setEmployees(empList);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch departments and categories';
+      const msg = err instanceof Error ? err.message : 'Failed to fetch master data';
       setError(msg);
     } finally {
       setIsLoadingMasterData(false);
     }
   }, [isAuthenticated]);
 
-  const fetchTickets = useCallback(async () => {
+  const fetchTickets = useCallback(async (params?: Record<string, any>) => {
     if (!isAuthenticated) return;
     setIsLoadingTickets(true);
     setError(null);
     try {
-      const ticketList = await api.get<Ticket[]>('/tickets').catch(() => null);
-      if (ticketList && ticketList.length > 0) {
-        // Merge or use live backend tickets
+      let url = '/tickets';
+      if (params && Object.keys(params).length > 0) {
+        const searchParams = new URLSearchParams();
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== 'ALL' && v !== '') {
+            searchParams.append(k, String(v));
+          }
+        });
+        const qs = searchParams.toString();
+        if (qs) url += `?${qs}`;
+      }
+      const ticketList = await api.get<Ticket[]>(url).catch(() => null);
+      if (Array.isArray(ticketList)) {
         setTickets(ticketList);
-      } else {
-        // Fallback to rich mock tickets if backend has zero or empty tickets
-        setTickets(MOCK_TICKETS);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch tickets';
       setError(msg);
-      setTickets(MOCK_TICKETS);
     } finally {
       setIsLoadingTickets(false);
     }
@@ -142,51 +164,18 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const createTicket = async (data: {
     title: string;
     description: string;
-    category_id: string;
-    subcategory_id?: string;
+    category_id?: string | null;
+    subcategory_id?: string | null;
     priority: TicketPriority;
   }): Promise<Ticket> => {
-    // Find responsible employee for the selected category
-    const resp = responsibilities.find(r => r.category_id === data.category_id);
-
-    try {
-      const newTicket = await api.post<Ticket>('/tickets', data);
-      setTickets(prev => [newTicket, ...prev]);
-      return newTicket;
-    } catch {
-      // Local creation fallback
-      const cat = categories.find(c => c.id === data.category_id);
-      const generatedNumber = `TKT-${String(Math.floor(100000 + Math.random() * 900000))}`;
-      const fallbackTicket: Ticket = {
-        id: `tkt-${Date.now()}`,
-        ticket_number: generatedNumber,
-        title: data.title,
-        description: data.description,
-        created_by: 'current-user-id',
-        category_id: data.category_id,
-        subcategory_id: data.subcategory_id || null,
-        assigned_to: resp ? resp.responsible_employee_id : null,
-        priority: data.priority,
-        status: 'OPEN',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        category: cat || null,
-        assignee: resp
-          ? {
-              id: resp.responsible_employee_id,
-              employee_id: resp.responsible_employee_id,
-              name: resp.responsible_employee_name,
-              email: resp.responsible_employee_email,
-              role: 'EMPLOYEE',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }
-          : null,
-      };
-      setTickets(prev => [fallbackTicket, ...prev]);
-      return fallbackTicket;
-    }
+    const payload = {
+      ...data,
+      category_id: data.category_id || undefined,
+      subcategory_id: data.subcategory_id || undefined,
+    };
+    const newTicket = await api.post<Ticket>('/tickets', payload);
+    setTickets(prev => [newTicket, ...prev]);
+    return newTicket;
   };
 
   const updateTicketStatus = async (
@@ -194,95 +183,102 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     status: TicketStatus,
     comment?: string
   ): Promise<Ticket> => {
-    try {
-      const updated = await api.put<Ticket>(`/tickets/${ticketId}/status`, {
-        status,
-        comment,
-      });
-      setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      return updated;
-    } catch {
-      // Local optimistic update
-      let updatedTicket!: Ticket;
-      setTickets(prev =>
-        prev.map(t => {
-          if (t.id === ticketId) {
-            updatedTicket = { ...t, status, updated_at: new Date().toISOString() };
-            return updatedTicket;
-          }
-          return t;
-        })
-      );
-      return updatedTicket;
-    }
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/status`, {
+      status,
+      comment,
+    });
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+    return updated;
   };
 
   const resolveTicket = async (
     ticketId: string,
     resolution_notes?: string
   ): Promise<Ticket> => {
-    try {
-      const updated = await api.put<Ticket>(`/tickets/${ticketId}/resolve`, {
-        resolution_notes,
-      });
-      setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      return updated;
-    } catch {
-      return await updateTicketStatus(ticketId, 'RESOLVED', resolution_notes);
-    }
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/resolve`, {
+      resolution_notes,
+    });
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+    return updated;
   };
 
   const closeTicket = async (ticketId: string): Promise<Ticket> => {
-    try {
-      const updated = await api.put<Ticket>(`/tickets/${ticketId}/close`);
-      setTickets(prev => prev.map(t => (t.id === ticketId ? updated : t)));
-      return updated;
-    } catch {
-      return await updateTicketStatus(ticketId, 'CLOSED');
-    }
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/close`);
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+    return updated;
   };
 
   const reopenTicket = async (ticketId: string, reason?: string): Promise<Ticket> => {
-    return await updateTicketStatus(ticketId, 'REOPENED', reason || 'Reopened by employee.');
+    // Valid backend transition for reopen from RESOLVED is IN_PROGRESS
+    return await updateTicketStatus(ticketId, 'IN_PROGRESS', reason || 'Reopened and returned to work queue.');
   };
 
   const assignTicket = async (ticketId: string, employeeId: string, employeeName?: string): Promise<void> => {
-    const employee = employees.find(e => e.id === employeeId || e.employee_id === employeeId);
-    const assignedName = employee ? employee.name : employeeName || 'Assigned Employee';
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/assign`, {
+      assignee_id: employeeId,
+    });
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+  };
 
-    try {
-      // In current backend, assigning is status change or PUT /tickets/{id}/assign
-      await api.put(`/tickets/${ticketId}/status`, {
-        status: 'ASSIGNED',
-        comment: `Ticket assigned to responsible employee: ${assignedName}`,
-      });
-    } catch {
-      // Fallback
-    }
+  const blockTicket = async (ticketId: string, reason: string): Promise<Ticket> => {
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/block`, {
+      reason,
+    });
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+    return updated;
+  };
 
-    setTickets(prev =>
-      prev.map(t => {
-        if (t.id === ticketId) {
-          return {
-            ...t,
-            assigned_to: employeeId,
-            assignee: employee || {
-              id: employeeId,
-              employee_id: employeeId,
-              name: assignedName,
-              email: `${employeeId}@resolvehub.com`,
-              role: 'EMPLOYEE',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            status: t.status === 'OPEN' ? 'ASSIGNED' : t.status,
-            updated_at: new Date().toISOString(),
-          };
-        }
-        return t;
-      })
-    );
+  const unblockTicket = async (ticketId: string, reason?: string): Promise<Ticket> => {
+    const updated = await api.put<Ticket>(`/tickets/${ticketId}/unblock`, {
+      reason,
+    });
+    setTickets(prev => prev.map(t => (t.id === ticketId || t.ticket_number === ticketId ? updated : t)));
+    return updated;
+  };
+
+  const getTicketJourney = async (ticketId: string): Promise<TicketJourneyEvent[]> => {
+    return await api.get<TicketJourneyEvent[]>(`/tickets/${ticketId}/journey`);
+  };
+
+  const bulkAssignDepartment = async (
+    userIds: string[],
+    departmentId: string
+  ): Promise<BulkAssignDepartmentResult> => {
+    const res = await api.post<BulkAssignDepartmentResult>('/users/bulk-assign-department', {
+      user_ids: userIds,
+      department_id: departmentId,
+    });
+    await fetchMasterData();
+    return res;
+  };
+
+  const createCategory = async (
+    departmentId: string,
+    name: string,
+    description?: string
+  ): Promise<Category> => {
+    const created = await api.post<Category>('/categories', {
+      department_id: departmentId,
+      name,
+      description,
+      is_active: true,
+    });
+    setCategories(prev => [...prev, created]);
+    return created;
+  };
+
+  const createSubcategory = async (
+    categoryId: string,
+    name: string,
+    description?: string
+  ): Promise<Subcategory> => {
+    const created = await api.post<Subcategory>('/subcategories', {
+      category_id: categoryId,
+      name,
+      description,
+      is_active: true,
+    });
+    return created;
   };
 
   const updateCategoryResponsibility = (
@@ -320,23 +316,10 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     content: string,
     is_internal: boolean = false
   ): Promise<TicketComment> => {
-    try {
-      return await api.post<TicketComment>(`/tickets/${ticketId}/comments`, {
-        content,
-        is_internal,
-      });
-    } catch {
-      const fakeComment: TicketComment = {
-        id: `cmt-${Date.now()}`,
-        ticket_id: ticketId,
-        user_id: 'current-user-id',
-        content,
-        is_internal,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      return fakeComment;
-    }
+    return await api.post<TicketComment>(`/tickets/${ticketId}/comments`, {
+      content,
+      is_internal,
+    });
   };
 
   const getAttachments = async (ticketId: string): Promise<TicketAttachment[]> => {
@@ -377,6 +360,12 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         closeTicket,
         reopenTicket,
         assignTicket,
+        blockTicket,
+        unblockTicket,
+        getTicketJourney,
+        bulkAssignDepartment,
+        createCategory,
+        createSubcategory,
         updateCategoryResponsibility,
         getComments,
         addComment,

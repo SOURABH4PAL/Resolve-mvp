@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTickets } from '../context/TicketContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
-import { TicketPriority } from '../types';
+import { TicketPriority, Subcategory } from '../types';
+import { api } from '../api/client';
 import {
   UploadCloud,
   X,
@@ -13,6 +14,7 @@ import {
   Building,
   Info,
   AlertCircle,
+  HelpCircle,
 } from 'lucide-react';
 
 export const CreateTicketPage: React.FC = () => {
@@ -23,11 +25,31 @@ export const CreateTicketPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [priority, setPriority] = useState<TicketPriority>('MEDIUM');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // Fetch subcategories when category changes
+  useEffect(() => {
+    if (categoryId) {
+      api.get<Subcategory[]>(`/subcategories?category_id=${categoryId}`)
+        .then(subs => {
+          if (Array.isArray(subs)) {
+            setSubcategories(subs);
+          } else {
+            setSubcategories([]);
+          }
+        })
+        .catch(() => setSubcategories([]));
+    } else {
+      setSubcategories([]);
+      setSubcategoryId('');
+    }
+  }, [categoryId]);
 
   // Filter categories by selected department if chosen, or show all
   const availableCategories = departmentId
@@ -37,13 +59,17 @@ export const CreateTicketPage: React.FC = () => {
   const handleDepartmentChange = (deptId: string) => {
     setDepartmentId(deptId);
     setCategoryId('');
+    setSubcategoryId('');
   };
 
   const handleCategoryChange = (catId: string) => {
     setCategoryId(catId);
-    const cat = categories.find(c => c.id === catId);
-    if (cat && !departmentId) {
-      setDepartmentId(cat.department_id);
+    setSubcategoryId('');
+    if (catId) {
+      const cat = categories.find(c => c.id === catId);
+      if (cat && !departmentId) {
+        setDepartmentId(cat.department_id);
+      }
     }
   };
 
@@ -59,7 +85,7 @@ export const CreateTicketPage: React.FC = () => {
       for (const f of incoming) {
         const ext = '.' + f.name.split('.').pop()?.toLowerCase();
         if (!ALLOWED_EXTENSIONS.includes(ext)) {
-          errorMsgs.push(`"${f.name}" has an unsupported format. Supported: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV.`);
+          errorMsgs.push(`"${f.name}" has an unsupported format. Supported formats: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV.`);
           continue;
         }
         if (f.size > MAX_FILE_SIZE_BYTES) {
@@ -82,7 +108,6 @@ export const CreateTicketPage: React.FC = () => {
       if (validFiles.length > 0) {
         setSelectedFiles(prev => [...prev, ...validFiles]);
       }
-      // Reset input value to allow selecting same file again if removed
       e.target.value = '';
     }
   };
@@ -94,19 +119,15 @@ export const CreateTicketPage: React.FC = () => {
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!title.trim()) {
-      newErrors.title = 'Ticket title / subject is required';
+      newErrors.title = 'Ticket title is required';
     } else if (title.trim().length < 5) {
       newErrors.title = 'Title must be at least 5 characters long';
     }
 
-    if (!categoryId) {
-      newErrors.category = 'Please select a ticket category';
-    }
-
     if (!description.trim()) {
-      newErrors.description = 'Please provide detailed description of the issue';
-    } else if (description.trim().length < 15) {
-      newErrors.description = 'Description should be detailed (at least 15 characters)';
+      newErrors.description = 'Please provide a clear description of the issue';
+    } else if (description.trim().length < 10) {
+      newErrors.description = 'Description should provide sufficient context (at least 10 characters)';
     }
 
     setErrors(newErrors);
@@ -123,11 +144,12 @@ export const CreateTicketPage: React.FC = () => {
       const createdTicket = await createTicket({
         title: title.trim(),
         description: description.trim(),
-        category_id: categoryId,
+        category_id: categoryId || null,
+        subcategory_id: subcategoryId || null,
         priority,
       });
 
-      // Upload any selected attachments
+      // Upload attachments if selected
       if (selectedFiles.length > 0) {
         for (const file of selectedFiles) {
           try {
@@ -140,25 +162,20 @@ export const CreateTicketPage: React.FC = () => {
 
       navigate(`/tickets/${createdTicket.id}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create ticket on server.';
+      const msg = err instanceof Error ? err.message : 'Failed to submit ticket. Please try again.';
       setServerError(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const selectedCategoryObj = categories.find(c => c.id === categoryId);
-  const selectedDeptObj = departments.find(
-    d => d.id === (departmentId || selectedCategoryObj?.department_id)
-  );
-
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Create New Ticket</h1>
+          <h1 className="page-title">Submit Ticket</h1>
           <p className="page-subtitle">
-            Log an issue with the backend. Real tickets are assigned ticket numbers and routed to departments.
+            Create an internal support ticket. You can choose a specific department/category or leave it as "Any / Not Specified" for administrative triage.
           </p>
         </div>
       </div>
@@ -186,49 +203,69 @@ export const CreateTicketPage: React.FC = () => {
         {/* Ticket Form */}
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">Issue Details</h3>
+            <h3 className="card-title">Ticket Information</h3>
           </div>
           <div className="card-body">
             <form onSubmit={handleSubmit}>
               <Input
-                label="Ticket Title / Subject"
+                label="Ticket Title"
                 placeholder="e.g. Dual monitor flickering when connected to docking station"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 required
                 error={errors.title}
-                hint="Be specific so the responsible team can quickly understand and resolve the problem."
+                hint="Provide a concise, descriptive summary of the problem."
               />
 
-              {/* Department & Category Selects */}
+              {/* Department & Category Selects with 'Any' support */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Select
-                  label="Target Department"
-                  placeholder="-- Select Department --"
+                  label="Department"
+                  placeholder="Any / Not Specified"
                   value={departmentId}
                   onChange={e => handleDepartmentChange(e.target.value)}
-                  options={departments.map(d => ({ value: d.id, label: d.name }))}
+                  options={[
+                    { value: '', label: 'Any / Not Specified' },
+                    ...departments.map(d => ({ value: d.id, label: d.name })),
+                  ]}
                 />
 
                 <Select
-                  label="Issue Category"
-                  placeholder="-- Select Category --"
+                  label="Category"
+                  placeholder="Any / Not Specified"
                   value={categoryId}
                   onChange={e => handleCategoryChange(e.target.value)}
-                  required
-                  error={errors.category}
-                  options={availableCategories.map(c => ({
-                    value: c.id,
-                    label: departmentId
-                      ? c.name
-                      : `${c.name} (${departments.find(d => d.id === c.department_id)?.name || 'General'})`,
-                  }))}
+                  options={[
+                    { value: '', label: 'Any / Not Specified' },
+                    ...availableCategories.map(c => ({
+                      value: c.id,
+                      label: departmentId
+                        ? c.name
+                        : `${c.name} (${departments.find(d => d.id === c.department_id)?.name || 'General'})`,
+                    })),
+                  ]}
                 />
               </div>
 
+              {/* Subcategory Select if category chosen */}
+              {categoryId && (
+                <div style={{ marginTop: 16 }}>
+                  <Select
+                    label="Subcategory"
+                    placeholder="Not Specified"
+                    value={subcategoryId}
+                    onChange={e => setSubcategoryId(e.target.value)}
+                    options={[
+                      { value: '', label: 'Not Specified (General)' },
+                      ...subcategories.map(s => ({ value: s.id, label: s.name })),
+                    ]}
+                  />
+                </div>
+              )}
+
               {/* Priority Select */}
-              <div className="form-group">
-                <label className="form-label required">Priority Level</label>
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label className="form-label required">Priority</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as TicketPriority[]).map(p => {
                     const isSelected = priority === p;
@@ -255,19 +292,19 @@ export const CreateTicketPage: React.FC = () => {
                   })}
                 </div>
                 <span className="form-hint" style={{ marginTop: 6 }}>
-                  {priority === 'LOW' && 'Low: Minor inconvenience with workaround available.'}
-                  {priority === 'MEDIUM' && 'Medium: Normal operational disruption affecting routine work.'}
-                  {priority === 'HIGH' && 'High: Serious business impact affecting multiple team deliverables.'}
-                  {priority === 'CRITICAL' && 'Critical: Major outage or system blocked requiring immediate attention.'}
+                  {priority === 'LOW' && 'Low: Minor issue, workaround available.'}
+                  {priority === 'MEDIUM' && 'Medium: Standard operational issue affecting routine work.'}
+                  {priority === 'HIGH' && 'High: Serious impact affecting critical operations.'}
+                  {priority === 'CRITICAL' && 'Critical: Complete work blockage or major outage.'}
                 </span>
               </div>
 
               {/* Description */}
               <div className="form-group">
-                <label className="form-label required">Detailed Description</label>
+                <label className="form-label required">Description</label>
                 <textarea
                   className="form-textarea"
-                  placeholder="Please provide steps to reproduce, error codes, device name, or any relevant details..."
+                  placeholder="Please describe the issue, error messages encountered, device details, and steps to reproduce..."
                   rows={5}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
@@ -278,7 +315,7 @@ export const CreateTicketPage: React.FC = () => {
 
               {/* Attachments */}
               <div className="form-group">
-                <label className="form-label">Supporting Documents & Screenshots</label>
+                <label className="form-label">Supporting Attachments</label>
                 <div
                   style={{
                     border: '2px dashed var(--color-slate-200)',
@@ -303,10 +340,10 @@ export const CreateTicketPage: React.FC = () => {
                   />
                   <UploadCloud size={28} style={{ color: 'var(--color-primary-600)', margin: '0 auto 8px' }} />
                   <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-slate-800)' }}>
-                    Drop files here or click to browse
+                    Choose files or drag &amp; drop here
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)', marginTop: 4 }}>
-                    Supported formats: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV (Max 10MB per file)
+                    Supported: PDF, PNG, JPG, TXT, DOCX, XLSX, CSV (Max 10MB per file)
                   </div>
                 </div>
 
@@ -321,23 +358,25 @@ export const CreateTicketPage: React.FC = () => {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '8px 12px',
-                          backgroundColor: '#ffffff',
-                          border: '1px solid var(--color-slate-200)',
+                          backgroundColor: 'var(--color-slate-100)',
                           borderRadius: 'var(--radius-md)',
+                          fontSize: '0.825rem',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
-                          <Paperclip size={14} style={{ color: 'var(--color-primary-600)' }} />
-                          <span style={{ fontWeight: 500 }}>{file.name}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <Paperclip size={14} style={{ color: 'var(--color-slate-500)', flexShrink: 0 }} />
+                          <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {file.name}
+                          </span>
+                          <span style={{ color: 'var(--color-slate-400)', fontSize: '0.75rem', flexShrink: 0 }}>
                             ({(file.size / 1024).toFixed(0)} KB)
                           </span>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
-                          className="icon-button"
-                          style={{ width: 24, height: 24 }}
+                          style={{ color: 'var(--color-slate-400)', padding: 2 }}
+                          title="Remove attachment"
                         >
                           <X size={14} />
                         </button>
@@ -347,12 +386,13 @@ export const CreateTicketPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Form Buttons */}
+              {/* Submit Buttons */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => navigate('/my-tickets')}
+                  onClick={() => navigate('/employee/my-tickets')}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
@@ -360,7 +400,6 @@ export const CreateTicketPage: React.FC = () => {
                   type="submit"
                   variant="primary"
                   isLoading={isSubmitting}
-                  leftIcon={<CheckCircle size={16} />}
                 >
                   Submit Ticket
                 </Button>
@@ -369,53 +408,19 @@ export const CreateTicketPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar Info Card */}
+        {/* Sidebar Guidelines */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ backgroundColor: '#ffffff' }}>
-            <div className="card-header">
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Building size={16} style={{ color: 'var(--color-primary-600)' }} />
-                Routing Overview
-              </h4>
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Info size={18} style={{ color: 'var(--color-primary-600)' }} />
+              <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600 }}>Submission Guidelines</h4>
             </div>
-            <div className="card-body" style={{ padding: 18, fontSize: '0.8rem', color: 'var(--color-slate-600)' }}>
-              <div style={{ marginBottom: 10 }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Derived Department:</span>
-                <p style={{ marginTop: 2, color: selectedDeptObj ? 'var(--color-primary-700)' : 'var(--color-slate-400)', fontWeight: 500 }}>
-                  {selectedDeptObj ? selectedDeptObj.name : 'Select category to auto-derive'}
-                </p>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Department Email:</span>
-                <p style={{ marginTop: 2, fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                  {selectedDeptObj ? selectedDeptObj.department_email || 'None specified' : '—'}
-                </p>
-              </div>
-              <div style={{ paddingTop: 10, borderTop: '1px solid var(--color-slate-100)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>Ticket Tracking:</span>
-                <p style={{ marginTop: 4, lineHeight: 1.4, color: 'var(--color-slate-500)' }}>
-                  Submissions generate an official ticket number and are automatically routed to the responsible department.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="card"
-            style={{
-              backgroundColor: 'var(--color-primary-50)',
-              borderColor: 'var(--color-primary-200)',
-            }}
-          >
-            <div className="card-body" style={{ padding: 18, fontSize: '0.8rem', color: 'var(--color-slate-700)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--color-primary-800)', marginBottom: 8 }}>
-                <Info size={16} />
-                Need quick help?
-              </div>
-              <p style={{ lineHeight: 1.45 }}>
-                Ensure your description includes all context, exact reproduction steps, and any error messages shown.
-              </p>
-            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.8rem', color: 'var(--color-slate-600)', lineHeight: 1.6 }}>
+              <li>Selecting "Any / Not Specified" routes your ticket to the triage team for department assignment.</li>
+              <li>Priority levels guide response and resolution time targets.</li>
+              <li>Include screenshots or logs whenever error messages appear.</li>
+              <li>Status updates and employee assignments are tracked in your Ticket Journey.</li>
+            </ul>
           </div>
         </div>
       </div>

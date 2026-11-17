@@ -4,6 +4,8 @@ export * from './Select';
 export * from './Modal';
 export * from './StatusBadge';
 export * from './PriorityBadge';
+export * from './SlaBadge';
+export * from './EmployeeName';
 export * from './TicketCard';
 export * from './Table';
 export { Navbar } from '../layout/Navbar';

@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, ConfigDict, EmailStr
+from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
 from app.models.user import UserRole
 
 
@@ -19,6 +19,20 @@ class UserCreate(UserBase):
 
 class UserStatusUpdate(BaseModel):
     is_active: bool
+
+
+class BulkAssignDepartmentRequest(BaseModel):
+    user_ids: List[str]
+    department_id: str
+
+
+class BulkAssignDepartmentResponse(BaseModel):
+    department_id: str
+    department_name: str
+    updated_count: int
+    failed_count: int
+    successful_user_ids: List[str]
+    failed_user_ids: List[str]
 
 
 class UserRead(UserBase):

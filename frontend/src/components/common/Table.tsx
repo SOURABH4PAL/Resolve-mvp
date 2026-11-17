@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'luci
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   render?: (item: T) => React.ReactNode;
   width?: string;
   align?: 'left' | 'center' | 'right';

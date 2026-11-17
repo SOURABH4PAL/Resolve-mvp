@@ -4,7 +4,16 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.ticket import TicketPriority, TicketStatus
-from app.schemas.ticket import TicketCreate, TicketRead, TicketStatusUpdate, TicketResolve, TicketAssign
+from app.schemas.ticket import (
+    TicketCreate,
+    TicketRead,
+    TicketStatusUpdate,
+    TicketResolve,
+    TicketAssign,
+    TicketBlock,
+    TicketUnblock,
+    TicketJourneyRead,
+)
 from app.schemas.pagination import PaginatedResponse
 from app.dependencies import get_current_user, require_role
 from app.services import ticket_service
@@ -18,7 +27,7 @@ def create_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new ticket."""
+    """Create a new ticket. Supports 'Any' / omitted category preference."""
     return ticket_service.create_ticket(db, ticket_in, current_user)
 
 
@@ -33,7 +42,10 @@ def list_tickets(
     subcategory_id: Optional[str] = Query(None, description="Filter by subcategory ID"),
     assigned_to: Optional[str] = Query(None, description="Filter by assigned user ID"),
     created_by: Optional[str] = Query(None, description="Filter by creator user ID"),
-    sort_by: Optional[str] = Query("created_at", description="Field to sort by"),
+    assignment_status: Optional[str] = Query(None, description="Filter by assignment status: assigned, unassigned, all"),
+    is_blocked: Optional[bool] = Query(None, description="Filter by blocked state"),
+    sla_status: Optional[str] = Query(None, description="Filter by SLA status: IN_SLA, AT_RISK, BREACHED, NO_SLA"),
+    sort_by: Optional[str] = Query("created_at", description="Field to sort by (created_at, updated_at, priority, status, title, unassigned_first)"),
     sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
     page: Optional[int] = Query(None, ge=1, description="Page number (1-based)"),
     page_size: Optional[int] = Query(None, ge=1, le=100, description="Items per page (1..100)"),
@@ -53,6 +65,9 @@ def list_tickets(
         subcategory_id=subcategory_id,
         assigned_to=assigned_to,
         created_by=created_by,
+        assignment_status=assignment_status,
+        is_blocked=is_blocked,
+        sla_status_filter=sla_status,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
@@ -82,8 +97,18 @@ def get_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get ticket detail by ID."""
+    """Get ticket detail by ID or ticket_number."""
     return ticket_service.get_ticket_by_id(db, ticket_id, current_user)
+
+
+@router.get("/{ticket_id}/journey", response_model=List[TicketJourneyRead])
+def get_ticket_journey(
+    ticket_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get chronological audit history / Ticket Journey events."""
+    return ticket_service.get_ticket_journey(db, ticket_id, current_user)
 
 
 @router.put("/{ticket_id}/assign", response_model=TicketRead)
@@ -95,6 +120,28 @@ def assign_ticket(
 ):
     """Assign a ticket to an active employee. SUPER_ADMIN only."""
     return ticket_service.assign_ticket(db, ticket_id, assign_in, current_user)
+
+
+@router.put("/{ticket_id}/block", response_model=TicketRead)
+def block_ticket(
+    ticket_id: str,
+    block_in: TicketBlock,
+    current_user: User = Depends(require_role(UserRole.SUPER_ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Block a ticket with an administrative reason. SUPER_ADMIN only."""
+    return ticket_service.block_ticket(db, ticket_id, block_in, current_user)
+
+
+@router.put("/{ticket_id}/unblock", response_model=TicketRead)
+def unblock_ticket(
+    ticket_id: str,
+    unblock_in: TicketUnblock,
+    current_user: User = Depends(require_role(UserRole.SUPER_ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Unblock a ticket with confirmation. SUPER_ADMIN only."""
+    return ticket_service.unblock_ticket(db, ticket_id, unblock_in, current_user)
 
 
 @router.put("/{ticket_id}/status", response_model=TicketRead)
