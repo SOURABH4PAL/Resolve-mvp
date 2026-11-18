@@ -1,16 +1,35 @@
 import { FaqItem } from '../types';
 import { MOCK_FAQS } from '../mock/mockData';
 
-const FAQ_STORAGE_KEY = 'resolvehub_faqs';
+const FAQ_STORAGE_KEY = 'resolvehub_faqs_v2';
 
 export const getFaqs = (): FaqItem[] => {
   const stored = localStorage.getItem(FAQ_STORAGE_KEY);
   if (!stored) {
-    localStorage.setItem(FAQ_STORAGE_KEY, JSON.stringify(MOCK_FAQS));
-    return MOCK_FAQS;
+    const oldStored = localStorage.getItem('resolvehub_faqs');
+    let combined = [...MOCK_FAQS];
+    if (oldStored) {
+      try {
+        const oldParsed: FaqItem[] = JSON.parse(oldStored);
+        oldParsed.forEach(oldItem => {
+          if (!combined.some(c => c.id === oldItem.id || c.question === oldItem.question)) {
+            combined.push(oldItem);
+          }
+        });
+      } catch (e) {
+        // Ignore parse error
+      }
+    }
+    localStorage.setItem(FAQ_STORAGE_KEY, JSON.stringify(combined));
+    return combined;
   }
   try {
-    return JSON.parse(stored);
+    const parsed: FaqItem[] = JSON.parse(stored);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(FAQ_STORAGE_KEY, JSON.stringify(MOCK_FAQS));
+      return MOCK_FAQS;
+    }
+    return parsed;
   } catch (e) {
     return MOCK_FAQS;
   }

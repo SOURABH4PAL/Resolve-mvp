@@ -527,6 +527,24 @@ export const MOCK_FAQS: FaqItem[] = [
     views: 650,
     helpful_count: 140,
   },
+  {
+    id: 'faq-4',
+    question: 'How do I connect to the office VPN while working remotely?',
+    answer: 'Download the GlobalProtect VPN client from the internal software portal. Log in with your company email and complete the MFA prompt on your mobile authenticator app.',
+    department_name: 'IT Support',
+    category_name: 'Network & Connectivity',
+    views: 310,
+    helpful_count: 94,
+  },
+  {
+    id: 'faq-5',
+    question: 'How can I submit reimbursement claims for internet and wellness allowances?',
+    answer: 'Navigate to the Finance portal > Expense Reimbursements, attach digital copies of your receipts before the 25th of each month, and your manager will approve them within 3 business days.',
+    department_name: 'Finance & Payroll',
+    category_name: 'Invoicing & Expenses',
+    views: 245,
+    helpful_count: 67,
+  },
 ];
 
 /**

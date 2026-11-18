@@ -171,6 +171,24 @@ def ensure_initial_seed():
                     helpful_count=140,
                     is_published=True,
                 ),
+                FAQ(
+                    question="How do I connect to the office VPN while working remotely?",
+                    answer="Download the GlobalProtect VPN client from the internal software portal. Log in with your company email and complete the MFA prompt on your mobile authenticator app.",
+                    department_id=it_dept.id if it_dept else None,
+                    category_id=hw_cat.id if hw_cat else None,
+                    views=310,
+                    helpful_count=94,
+                    is_published=True,
+                ),
+                FAQ(
+                    question="How can I submit reimbursement claims for internet and wellness allowances?",
+                    answer="Navigate to the Finance portal > Expense Reimbursements, attach digital copies of your receipts before the 25th of each month, and your manager will approve them within 3 business days.",
+                    department_id=fin_dept.id if fin_dept else None,
+                    category_id=pay_cat.id if pay_cat else None,
+                    views=245,
+                    helpful_count=67,
+                    is_published=True,
+                ),
             ]
             db.add_all(default_faqs)
             db.commit()
