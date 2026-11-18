@@ -5,6 +5,9 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+_faq_views: dict[str, int] = {}
+
+
 class FAQ(Base):
     __tablename__ = "faqs"
 
@@ -14,8 +17,6 @@ class FAQ(Base):
     question = Column(String(500), nullable=False)
     answer = Column(Text, nullable=False)
     is_published = Column(Boolean, default=True, nullable=False)
-    helpful_count = Column(Integer, default=0, nullable=False)
-    views = Column(Integer, default=0, nullable=False)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -23,7 +24,20 @@ class FAQ(Base):
     department = relationship("Department")
     category = relationship("Category")
     author = relationship("User", foreign_keys=[created_by])
-    votes = relationship("FAQVote", back_populates="faq", cascade="all, delete-orphan")
+    votes = relationship("FAQVote", back_populates="faq", cascade="all, delete-orphan", lazy="selectin")
+
+    @property
+    def helpful_count(self) -> int:
+        return len(self.votes) if self.votes else 0
+
+    @property
+    def views(self) -> int:
+        return _faq_views.get(self.id, 0)
+
+    @views.setter
+    def views(self, count: int) -> None:
+        _faq_views[self.id] = count
+
 
 
 class FAQVote(Base):

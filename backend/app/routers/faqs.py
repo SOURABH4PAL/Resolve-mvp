@@ -92,8 +92,6 @@ def create_faq(
         department_id=dept_id,
         category_id=cat_id,
         is_published=faq_in.is_published,
-        helpful_count=0,
-        views=0,
         created_by=admin.id,
     )
     db.add(faq)
@@ -193,19 +191,18 @@ def upvote_faq(
 
     if existing_vote:
         db.delete(existing_vote)
-        faq.helpful_count = max(0, (faq.helpful_count or 0) - 1)
         is_voted = False
     else:
         new_vote = FAQVote(faq_id=faq_id, user_id=current_user.id)
         db.add(new_vote)
-        faq.helpful_count = (faq.helpful_count or 0) + 1
         is_voted = True
 
     db.commit()
-    db.refresh(faq)
+    db.expire_all()
+    faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
     return {
-        "faq_id": faq.id,
-        "helpful_count": faq.helpful_count,
+        "faq_id": faq_id,
+        "helpful_count": faq.helpful_count if faq else 0,
         "is_voted": is_voted,
         "detail": "Vote updated successfully",
     }
@@ -222,7 +219,5 @@ def increment_faq_view(
     if not faq:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="FAQ not found")
 
-    faq.views = (faq.views or 0) + 1
-    db.commit()
-    db.refresh(faq)
+    faq.views = faq.views + 1
     return {"faq_id": faq.id, "views": faq.views}
