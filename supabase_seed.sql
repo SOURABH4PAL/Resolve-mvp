@@ -190,3 +190,73 @@ INSERT INTO sla_policies (id, name, priority, first_response_hours, resolution_h
 INSERT INTO sla_policies (id, name, priority, first_response_hours, resolution_hours, is_active, created_at, updated_at) VALUES ('58dd6fda-391f-46d7-9162-ae9111fdc077', 'High Priority SLA', 'HIGH', 8, 24, true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
 INSERT INTO sla_policies (id, name, priority, first_response_hours, resolution_hours, is_active, created_at, updated_at) VALUES ('b036a64b-ab7d-4f80-81bd-2ddb71522cac', 'Medium Priority SLA', 'MEDIUM', 24, 48, true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
 INSERT INTO sla_policies (id, name, priority, first_response_hours, resolution_hours, is_active, created_at, updated_at) VALUES ('71f33153-ed26-49f3-8186-6f137d05f91b', 'Low Priority SLA', 'LOW', 48, 96, true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+
+-- 6. Baseline FAQs (Knowledge Base)
+INSERT INTO faqs (id, department_id, category_id, question, answer, is_published, helpful_count, views, created_by, created_at, updated_at)
+VALUES 
+(
+  'e1000001-0000-0000-0000-000000000001',
+  'c3bc1d28-092c-481f-96c2-412878112526',
+  '906f830b-b808-4d23-b0d8-faec36aa327f',
+  'How do I request a replacement laptop charger?',
+  'Submit an IT Support ticket under Hardware Issues. The responsible IT employee will arrange pickup at the 3rd floor reception.',
+  true,
+  85,
+  420,
+  'a4c4acac-3c18-4cf6-aa38-961352ada4af',
+  NOW(),
+  NOW()
+),
+(
+  'e1000001-0000-0000-0000-000000000002',
+  'f8ac1dea-c5da-4d49-ad56-b246fb55683a',
+  '176c2732-f0e9-4fe9-b8fd-962bce467504',
+  'Where can I download my annual Form 16 / tax statement?',
+  'Form 16 is published annually by the Finance department in the payroll portal under Tax Documents every June 15.',
+  true,
+  210,
+  890,
+  'a4c4acac-3c18-4cf6-aa38-961352ada4af',
+  NOW(),
+  NOW()
+),
+(
+  'e1000001-0000-0000-0000-000000000003',
+  'f8ac1dea-c5da-4d49-ad56-b246fb55683a',
+  'da34f3f3-9e5c-4005-adc9-f583ef2eef00',
+  'What is the policy for carry-forward leaves?',
+  'Up to 15 earned leaves can be carried over into the new calendar year. Unused leaves beyond 15 lapse on Dec 31.',
+  true,
+  140,
+  650,
+  'a4c4acac-3c18-4cf6-aa38-961352ada4af',
+  NOW(),
+  NOW()
+),
+(
+  'e1000001-0000-0000-0000-000000000004',
+  'c3bc1d28-092c-481f-96c2-412878112526',
+  '6619d0cd-0c68-493c-afe3-0a301ba3e120',
+  'How do I connect to the office VPN while working remotely?',
+  'Download the GlobalProtect VPN client from the internal software portal. Log in with your company email and complete the MFA prompt on your mobile authenticator app.',
+  true,
+  94,
+  310,
+  'a4c4acac-3c18-4cf6-aa38-961352ada4af',
+  NOW(),
+  NOW()
+),
+(
+  'e1000001-0000-0000-0000-000000000005',
+  'f8ac1dea-c5da-4d49-ad56-b246fb55683a',
+  '6f2367ee-a225-4dcd-abfd-2dbf9a6e5e05',
+  'How can I submit reimbursement claims for internet and wellness allowances?',
+  'Navigate to the Finance portal > Expense Reimbursements, attach digital copies of your receipts before the 25th of each month, and your manager will approve them within 3 business days.',
+  true,
+  67,
+  245,
+  'a4c4acac-3c18-4cf6-aa38-961352ada4af',
+  NOW(),
+  NOW()
+)
+ON CONFLICT (id) DO UPDATE SET question = EXCLUDED.question, answer = EXCLUDED.answer;
