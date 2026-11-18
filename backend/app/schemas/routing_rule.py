@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
+from app.schemas.user import UserRead
 
 
 class RoutingRuleCreate(BaseModel):
@@ -33,5 +34,6 @@ class RoutingRuleRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    assigned_user: Optional[UserRead] = None
 
     model_config = ConfigDict(from_attributes=True)

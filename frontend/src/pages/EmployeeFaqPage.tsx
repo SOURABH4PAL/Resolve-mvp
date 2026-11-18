@@ -3,6 +3,8 @@ import { Search, BookOpen, ThumbsUp, ChevronDown, ChevronUp, HelpCircle, Buildin
 import { FaqItem } from '../types';
 import { api } from '../api/client';
 
+import { getFaqs, saveFaqs, voteFaq as voteLocalFaq, incrementFaqView as incrementLocalView } from '../utils/faqStorage';
+
 export const EmployeeFaqPage: React.FC = () => {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,15 +17,32 @@ export const EmployeeFaqPage: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await api.get<FaqItem[]>('/faqs');
-      const loaded = data || [];
-      setFaqs(loaded);
+      if (Array.isArray(data) && data.length > 0) {
+        setFaqs(data);
+        saveFaqs(data);
+        const votes: Record<string, boolean> = {};
+        data.forEach(f => {
+          if (f.is_voted) votes[f.id] = true;
+        });
+        setVotedIds(votes);
+      } else {
+        const local = getFaqs();
+        setFaqs(local);
+        const votes: Record<string, boolean> = {};
+        local.forEach(f => {
+          if (f.is_voted) votes[f.id] = true;
+        });
+        setVotedIds(votes);
+      }
+    } catch (err) {
+      console.warn('Backend API /faqs unreachable, using local storage cache:', err);
+      const local = getFaqs();
+      setFaqs(local);
       const votes: Record<string, boolean> = {};
-      loaded.forEach(f => {
+      local.forEach(f => {
         if (f.is_voted) votes[f.id] = true;
       });
       setVotedIds(votes);
-    } catch (err) {
-      console.error('Failed to load FAQs:', err);
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +68,9 @@ export const EmployeeFaqPage: React.FC = () => {
     setExpandedId(prev => {
       const next = prev === id ? null : id;
       if (next) {
-        api.post('/faqs/' + id + '/view').catch(() => {});
+        api.post('/faqs/' + id + '/view').catch(() => {
+          incrementLocalView(id);
+        });
       }
       return next;
     });
@@ -68,7 +89,10 @@ export const EmployeeFaqPage: React.FC = () => {
       }));
       setVotedIds(prev => ({ ...prev, [id]: res.is_voted }));
     } catch (err: unknown) {
-      console.error('Failed to vote FAQ:', err);
+      console.warn('API upvote failed, recording vote locally:', err);
+      const { faqs: updatedList, is_voted, helpful_count } = voteLocalFaq(id);
+      setFaqs(updatedList);
+      setVotedIds(prev => ({ ...prev, [id]: is_voted }));
     }
   };
 

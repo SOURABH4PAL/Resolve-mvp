@@ -56,6 +56,9 @@ export const AdminCategoriesPage: React.FC = () => {
   const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
   const [selectedResp, setSelectedResp] = useState<CategoryResponsibility | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentSuccess, setAssignmentSuccess] = useState<string | null>(null);
 
   // Subcategory Add/Edit Modal
   const [subcatModalOpen, setSubcatModalOpen] = useState(false);
@@ -134,7 +137,9 @@ export const AdminCategoriesPage: React.FC = () => {
     setSelectedCategory(cat);
     setSelectedSubcategory(null);
     setSelectedResp(resp || null);
-    setSelectedEmployeeId(resp?.responsible_employee_id || employees[0]?.id || '');
+    // Never pre-fill with employees[0] (Akash Yadav); only fill if an actual assignment exists
+    setSelectedEmployeeId(resp?.responsible_employee_id || '');
+    setAssignmentError(null);
     setAssignModalOpen(true);
   };
 
@@ -143,23 +148,48 @@ export const AdminCategoriesPage: React.FC = () => {
     setSelectedCategory(cat);
     setSelectedSubcategory(sub);
     setSelectedResp(resp || null);
-    setSelectedEmployeeId(resp?.responsible_employee_id || employees[0]?.id || '');
+    // Never pre-fill with employees[0]; only fill if an actual direct assignment exists
+    setSelectedEmployeeId(resp?.responsible_employee_id || '');
+    setAssignmentError(null);
     setAssignModalOpen(true);
   };
 
-  // Remove Employee Responsibility
-  const handleRemoveEmployee = (cat: Category, resp?: CategoryResponsibility) => {
+  // Remove Category Employee Responsibility
+  const handleRemoveEmployee = async (cat: Category, resp?: CategoryResponsibility) => {
     if (window.confirm(`Are you sure you want to remove the assigned employee for ${cat.name}?`)) {
-      if (resp) {
-        removeCategoryResponsibility(resp.id);
-      } else {
-        removeCategoryResponsibility(cat.id);
+      try {
+        if (resp) {
+          await removeCategoryResponsibility(resp.id);
+        } else {
+          await removeCategoryResponsibility(`resp-${cat.id}`);
+        }
+        setAssignmentSuccess(`Removed assignment for ${cat.name}`);
+        setTimeout(() => setAssignmentSuccess(null), 3000);
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : 'Failed to remove assignment');
+      }
+    }
+  };
+
+  // Remove Subcategory Employee Responsibility (revert to category inheritance)
+  const handleRemoveSubcategoryEmployee = async (sub: Subcategory, resp?: CategoryResponsibility) => {
+    if (window.confirm(`Are you sure you want to remove the direct assignment for subcategory ${sub.name}?`)) {
+      try {
+        if (resp) {
+          await removeCategoryResponsibility(resp.id);
+        } else {
+          await removeCategoryResponsibility(`resp-sub-${sub.id}`);
+        }
+        setAssignmentSuccess(`Removed direct assignment for ${sub.name}`);
+        setTimeout(() => setAssignmentSuccess(null), 3000);
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : 'Failed to remove subcategory assignment');
       }
     }
   };
 
   // Save Assignment from Category View
-  const handleSaveAssignment = () => {
+  const handleSaveAssignment = async () => {
     if (!selectedCategory || !selectedEmployeeId) return;
 
     const emp = employees.find(e => e.id === selectedEmployeeId || e.employee_id === selectedEmployeeId);
@@ -167,42 +197,55 @@ export const AdminCategoriesPage: React.FC = () => {
 
     const dept = departments.find(d => d.id === selectedCategory.department_id) || selectedCategory.department;
 
-    if (selectedSubcategory) {
-      const respId = selectedResp?.id || `resp-sub-${selectedSubcategory.id}`;
-      updateCategoryResponsibility(
-        respId,
-        emp.id,
-        emp.name,
-        emp.email,
-        {
-          department_id: dept?.id || '',
-          department_name: dept?.name || '',
-          category_id: selectedCategory.id,
-          category_name: selectedCategory.name,
-          subcategory_id: selectedSubcategory.id,
-          subcategory_name: selectedSubcategory.name,
-        }
-      );
-    } else {
-      const respId = selectedResp?.id || `resp-${selectedCategory.id}`;
-      updateCategoryResponsibility(
-        respId,
-        emp.id,
-        emp.name,
-        emp.email,
-        {
-          department_id: dept?.id || '',
-          department_name: dept?.name || '',
-          category_id: selectedCategory.id,
-          category_name: selectedCategory.name,
-        }
-      );
-    }
+    setIsSavingAssignment(true);
+    setAssignmentError(null);
+    try {
+      if (selectedSubcategory) {
+        const respId = selectedResp?.id || `resp-sub-${selectedSubcategory.id}`;
+        await updateCategoryResponsibility(
+          respId,
+          emp.id,
+          emp.name,
+          emp.email,
+          {
+            department_id: dept?.id || selectedCategory.department_id,
+            department_name: dept?.name || '',
+            category_id: selectedCategory.id,
+            category_name: selectedCategory.name,
+            subcategory_id: selectedSubcategory.id,
+            subcategory_name: selectedSubcategory.name,
+          }
+        );
+        setAssignmentSuccess(`Assigned ${emp.name} to ${selectedCategory.name} > ${selectedSubcategory.name}`);
+      } else {
+        const respId = selectedResp?.id || `resp-${selectedCategory.id}`;
+        await updateCategoryResponsibility(
+          respId,
+          emp.id,
+          emp.name,
+          emp.email,
+          {
+            department_id: dept?.id || selectedCategory.department_id,
+            department_name: dept?.name || '',
+            category_id: selectedCategory.id,
+            category_name: selectedCategory.name,
+          }
+        );
+        setAssignmentSuccess(`Assigned ${emp.name} to ${selectedCategory.name}`);
+      }
 
-    setAssignModalOpen(false);
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setSelectedResp(null);
+      setTimeout(() => setAssignmentSuccess(null), 3000);
+      setAssignModalOpen(false);
+      setSelectedCategory(null);
+      setSelectedSubcategory(null);
+      setSelectedResp(null);
+      setSelectedEmployeeId('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save employee assignment';
+      setAssignmentError(msg);
+    } finally {
+      setIsSavingAssignment(false);
+    }
   };
 
   // Subcategory actions
@@ -261,7 +304,7 @@ export const AdminCategoriesPage: React.FC = () => {
   };
 
   // Save Direct Assignment from Employee Directory
-  const handleSaveDirectAssignment = () => {
+  const handleSaveDirectAssignment = async () => {
     if (!targetEmployeeForAssignment || !directAssignCatId) return;
 
     const cat = categories.find(c => c.id === directAssignCatId);
@@ -271,20 +314,26 @@ export const AdminCategoriesPage: React.FC = () => {
     const sub = directAssignSubId ? subcategories.find(s => s.id === directAssignSubId) : undefined;
 
     const respId = sub ? `resp-sub-${sub.id}` : `resp-${cat.id}`;
-    updateCategoryResponsibility(
-      respId,
-      targetEmployeeForAssignment.id,
-      targetEmployeeForAssignment.name,
-      targetEmployeeForAssignment.email,
-      {
-        department_id: dept?.id || '',
-        department_name: dept?.name || '',
-        category_id: cat.id,
-        category_name: cat.name,
-        subcategory_id: sub?.id,
-        subcategory_name: sub?.name,
-      }
-    );
+    try {
+      await updateCategoryResponsibility(
+        respId,
+        targetEmployeeForAssignment.id,
+        targetEmployeeForAssignment.name,
+        targetEmployeeForAssignment.email,
+        {
+          department_id: dept?.id || cat.department_id,
+          department_name: dept?.name || '',
+          category_id: cat.id,
+          category_name: cat.name,
+          subcategory_id: sub?.id,
+          subcategory_name: sub?.name,
+        }
+      );
+      setAssignmentSuccess(`Assigned ${targetEmployeeForAssignment.name} to ${cat.name}${sub ? ` > ${sub.name}` : ''}`);
+      setTimeout(() => setAssignmentSuccess(null), 3000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save assignment');
+    }
 
     setDirectAssignModalOpen(false);
     setTargetEmployeeForAssignment(null);
@@ -416,13 +465,16 @@ export const AdminCategoriesPage: React.FC = () => {
       render: cat => {
         const subs = subcategories.filter(s => s.category_id === cat.id);
         const catResp = responsibilities.find(
-          r => !r.subcategory_id && (r.category_id === cat.id || r.category_name.toLowerCase() === cat.name.toLowerCase())
+          r => !r.subcategory_id && (r.category_id === cat.id || (r.category_name && cat.name && r.category_name.toLowerCase() === cat.name.toLowerCase()))
         );
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {subs.length > 0 ? (
               subs.map(s => {
                 const subResp = responsibilities.find(r => r.subcategory_id === s.id);
+                const hasDirectAssignee = Boolean(subResp && subResp.responsible_employee_name && subResp.responsible_employee_name.trim() !== '');
+                const hasCatAssignee = Boolean(catResp && catResp.responsible_employee_name && catResp.responsible_employee_name.trim() !== '');
+
                 return (
                   <div
                     key={s.id}
@@ -432,21 +484,29 @@ export const AdminCategoriesPage: React.FC = () => {
                       justifyContent: 'space-between',
                       gap: 8,
                       fontSize: '0.75rem',
-                      padding: '4px 8px',
+                      padding: '5px 8px',
                       borderRadius: 4,
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      backgroundColor: hasDirectAssignee ? '#f0fdf4' : '#f8fafc',
+                      border: `1px solid ${hasDirectAssignee ? '#bbf7d0' : '#e2e8f0'}`,
                     }}
                   >
                     <div>
                       <span style={{ fontWeight: 600, color: 'var(--color-slate-800)' }}>{s.name}</span>
-                      {subResp && subResp.responsible_employee_name ? (
-                        <div style={{ fontSize: '0.7rem', color: '#16a34a' }}>
-                          Assignee: <strong>{subResp.responsible_employee_name}</strong>
+                      {hasDirectAssignee ? (
+                        <div style={{ fontSize: '0.7rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                          <span>Assignee: <strong>{subResp!.responsible_employee_name}</strong></span>
+                          <span style={{ fontSize: '0.625rem', color: '#15803d', backgroundColor: '#dcfce7', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>Direct</span>
                         </div>
                       ) : (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--color-slate-400)' }}>
-                          Assignee: {catResp?.responsible_employee_name ? `Inherits (${catResp.responsible_employee_name})` : 'Unassigned'}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-slate-500)', marginTop: 1 }}>
+                          Assignee:{' '}
+                          {hasCatAssignee ? (
+                            <span style={{ color: '#0369a1' }}>
+                              Inherits (<strong>{catResp!.responsible_employee_name}</strong>)
+                            </span>
+                          ) : (
+                            <span style={{ color: '#dc2626', fontWeight: 600 }}>Unassigned</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -464,8 +524,25 @@ export const AdminCategoriesPage: React.FC = () => {
                           fontWeight: 600,
                         }}
                       >
-                        {subResp?.responsible_employee_name ? 'Reassign' : 'Assign'}
+                        {hasDirectAssignee ? 'Reassign' : 'Assign'}
                       </button>
+                      {hasDirectAssignee && (
+                        <button
+                          onClick={() => handleRemoveSubcategoryEmployee(s, subResp)}
+                          title="Remove direct assignment (revert to category inheritance)"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#dc2626',
+                            cursor: 'pointer',
+                            padding: '1px 4px',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
                       <button
                         onClick={() => handleOpenEditSubcategory(cat, s)}
                         title="Edit Subcategory"
@@ -529,9 +606,9 @@ export const AdminCategoriesPage: React.FC = () => {
       align: 'right',
       render: cat => {
         const resp = responsibilities.find(
-          r => r.category_id === cat.id || r.category_name.toLowerCase() === cat.name.toLowerCase()
+          r => !r.subcategory_id && (r.category_id === cat.id || (r.category_name && cat.name && r.category_name.toLowerCase() === cat.name.toLowerCase()))
         );
-        const hasEmployee = resp && resp.responsible_employee_name && resp.responsible_employee_name.trim() !== '';
+        const hasEmployee = Boolean(resp && resp.responsible_employee_id && resp.responsible_employee_name && resp.responsible_employee_name.trim() !== '');
 
         return (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -661,6 +738,26 @@ export const AdminCategoriesPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {assignmentSuccess && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 18px',
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: 8,
+            color: '#15803d',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+          }}
+        >
+          <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+          <span>{assignmentSuccess}</span>
+        </div>
+      )}
 
       {/* =========================================================
           VIEW 1: CATEGORIES & SUBCATEGORIES TAXONOMY
@@ -907,7 +1004,8 @@ export const AdminCategoriesPage: React.FC = () => {
                       const deptName = empDept?.name || emp.department?.name || 'Not assigned';
 
                       const empResps = responsibilities.filter(
-                        r => r.responsible_employee_id === emp.id || r.responsible_employee_email === emp.email
+                        r => Boolean(r.responsible_employee_id && r.responsible_employee_id === emp.id) ||
+                             Boolean(emp.email && r.responsible_employee_email && r.responsible_employee_email === emp.email)
                       );
 
                       return (
@@ -1185,10 +1283,15 @@ export const AdminCategoriesPage: React.FC = () => {
         }
         footer={
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setAssignModalOpen(false)}>
+            <Button variant="secondary" onClick={() => setAssignModalOpen(false)} disabled={isSavingAssignment}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSaveAssignment}>
+            <Button
+              variant="primary"
+              onClick={handleSaveAssignment}
+              isLoading={isSavingAssignment}
+              disabled={!selectedEmployeeId || isSavingAssignment}
+            >
               Save Assignment
             </Button>
           </div>
@@ -1196,6 +1299,12 @@ export const AdminCategoriesPage: React.FC = () => {
       >
         {selectedCategory && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {assignmentError && (
+              <div style={{ padding: '10px 14px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, color: '#991b1b', fontSize: '0.825rem' }}>
+                {assignmentError}
+              </div>
+            )}
+
             <div style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>
                 {selectedSubcategory ? 'Selected Subcategory' : 'Selected Category'}

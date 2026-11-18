@@ -225,32 +225,46 @@ export const AdminEmployeeManagementPage: React.FC = () => {
     setAssignModalOpen(true);
   };
 
-  const handleSaveResponsibility = () => {
+  const handleSaveResponsibility = async () => {
     if (!targetEmployee || !selectedCategoryId) return;
 
-    const existingResp = responsibilities.find(r => r.category_id === selectedCategoryId);
+    const existingResp = responsibilities.find(r => !r.subcategory_id && r.category_id === selectedCategoryId);
     const cat = categories.find(c => c.id === selectedCategoryId);
 
-    if (existingResp) {
-      updateCategoryResponsibility(
-        existingResp.id,
-        targetEmployee.id,
-        targetEmployee.name,
-        targetEmployee.email
-      );
-    } else if (cat) {
-      updateCategoryResponsibility(
-        `resp-${Date.now()}`,
-        targetEmployee.id,
-        targetEmployee.name,
-        targetEmployee.email
-      );
-    }
+    try {
+      if (existingResp) {
+        await updateCategoryResponsibility(
+          existingResp.id,
+          targetEmployee.id,
+          targetEmployee.name,
+          targetEmployee.email,
+          {
+            department_id: cat?.department_id,
+            category_id: selectedCategoryId,
+            category_name: cat?.name,
+          }
+        );
+      } else if (cat) {
+        await updateCategoryResponsibility(
+          `resp-${cat.id}`,
+          targetEmployee.id,
+          targetEmployee.name,
+          targetEmployee.email,
+          {
+            department_id: cat.department_id,
+            category_id: cat.id,
+            category_name: cat.name,
+          }
+        );
+      }
 
-    setAssignModalOpen(false);
-    setTargetEmployee(null);
-    setSuccessMsg(`Assigned responsibility to ${targetEmployee.name}`);
-    setTimeout(() => setSuccessMsg(''), 4000);
+      setAssignModalOpen(false);
+      setTargetEmployee(null);
+      setSuccessMsg(`Assigned responsibility to ${targetEmployee.name}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to assign responsibility');
+    }
   };
 
   const columns: Column<User>[] = [

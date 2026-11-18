@@ -33,9 +33,44 @@ export const addFaq = (newFaq: Omit<FaqItem, 'id' | 'views' | 'helpful_count'>):
   return updated;
 };
 
+export const updateFaq = (id: string, updatedFields: Partial<FaqItem>): FaqItem[] => {
+  const faqs = getFaqs();
+  const updated = faqs.map(f => (f.id === id ? { ...f, ...updatedFields } : f));
+  saveFaqs(updated);
+  return updated;
+};
+
 export const deleteFaq = (id: string): FaqItem[] => {
   const faqs = getFaqs();
   const updated = faqs.filter(f => f.id !== id);
+  saveFaqs(updated);
+  return updated;
+};
+
+export const voteFaq = (id: string): { faqs: FaqItem[]; is_voted: boolean; helpful_count: number } => {
+  const faqs = getFaqs();
+  let is_voted = false;
+  let helpful_count = 0;
+  const updated = faqs.map(f => {
+    if (f.id === id) {
+      const nextVoted = !f.is_voted;
+      is_voted = nextVoted;
+      helpful_count = Math.max(0, (f.helpful_count || 0) + (nextVoted ? 1 : -1));
+      return {
+        ...f,
+        is_voted: nextVoted,
+        helpful_count,
+      };
+    }
+    return f;
+  });
+  saveFaqs(updated);
+  return { faqs: updated, is_voted, helpful_count };
+};
+
+export const incrementFaqView = (id: string): FaqItem[] => {
+  const faqs = getFaqs();
+  const updated = faqs.map(f => (f.id === id ? { ...f, views: (f.views || 0) + 1 } : f));
   saveFaqs(updated);
   return updated;
 };

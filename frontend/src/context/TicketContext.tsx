@@ -127,7 +127,7 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const mappedResponsibilities: CategoryResponsibility[] = ruleList
           .filter((rule: any) => rule.is_active && rule.assigned_user_id)
           .map((rule: any) => {
-            const emp = (empList || []).find((u: any) => u.id === rule.assigned_user_id);
+            const emp = rule.assigned_user || (empList || []).find((u: any) => u.id === rule.assigned_user_id);
             const cat = (catList || []).find((c: any) => c.id === rule.category_id);
             const sub = (subList || []).find((s: any) => s.id === rule.subcategory_id);
             const dept = (deptList || []).find(
@@ -299,89 +299,152 @@ export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       subcategory_name?: string;
     }
   ): Promise<void> => {
-    try {
-      const isExistingRule = responsibilities.some(r => r.id === responsibilityId && r.id.length > 20);
-      let savedRuleId = responsibilityId;
+    // Resolve category, subcategory, and department IDs reliably
+    const existingResp = responsibilities.find(r => r.id === responsibilityId);
+    let catId = categoryDetails?.category_id || existingResp?.category_id || undefined;
+    let subId = categoryDetails?.subcategory_id !== undefined ? categoryDetails.subcategory_id : (existingResp?.subcategory_id || undefined);
+    let deptId = categoryDetails?.department_id || existingResp?.department_id || undefined;
 
-      if (isExistingRule) {
-        await api.put(`/routing-rules/${responsibilityId}`, {
-          assigned_user_id: responsibleEmployeeId,
-          department_id: categoryDetails?.department_id,
-          category_id: categoryDetails?.category_id,
-          subcategory_id: categoryDetails?.subcategory_id,
-        });
-      } else {
-        const res = await api.post<any>('/routing-rules', {
-          assigned_user_id: responsibleEmployeeId,
-          department_id: categoryDetails?.department_id,
-          category_id: categoryDetails?.category_id,
-          subcategory_id: categoryDetails?.subcategory_id,
-          default_priority: 'MEDIUM',
-        });
-        if (res && res.id) savedRuleId = res.id;
-      }
+    // Decode encoded pseudo-IDs if needed
+    if (!subId && responsibilityId.startsWith('resp-sub-')) {
+      subId = responsibilityId.replace('resp-sub-', '');
+    } else if (!catId && responsibilityId.startsWith('resp-')) {
+      catId = responsibilityId.replace('resp-', '');
+    }
 
-      setResponsibilities(prev => {
-        const exists = prev.some(
-          r =>
-            r.id === responsibilityId ||
-            (categoryDetails?.category_id &&
-              r.category_id === categoryDetails.category_id &&
-              (!categoryDetails?.subcategory_id || r.subcategory_id === categoryDetails.subcategory_id))
-        );
-        if (exists) {
-          return prev.map(r =>
-            r.id === responsibilityId ||
-            (categoryDetails?.category_id &&
-              r.category_id === categoryDetails.category_id &&
-              (!categoryDetails?.subcategory_id || r.subcategory_id === categoryDetails.subcategory_id))
-              ? {
-                  ...r,
-                  id: savedRuleId,
-                  responsible_employee_id: responsibleEmployeeId,
-                  responsible_employee_name: responsibleEmployeeName,
-                  responsible_employee_email: responsibleEmployeeEmail,
-                  ...(categoryDetails?.department_id && { department_id: categoryDetails.department_id }),
-                  ...(categoryDetails?.department_name && { department_name: categoryDetails.department_name }),
-                  ...(categoryDetails?.category_id && { category_id: categoryDetails.category_id }),
-                  ...(categoryDetails?.category_name && { category_name: categoryDetails.category_name }),
-                  ...(categoryDetails?.subcategory_id && { subcategory_id: categoryDetails.subcategory_id }),
-                  ...(categoryDetails?.subcategory_name && { subcategory_name: categoryDetails.subcategory_name }),
-                  updated_at: new Date().toISOString(),
-                }
-              : r
-          );
-        }
-        return [
-          ...prev,
-          {
+    // Convert empty strings to undefined to prevent foreign key errors
+    if (catId === '') catId = undefined;
+    if (subId === '') subId = undefined;
+    if (deptId === '') deptId = undefined;
+
+    const isExistingRule = responsibilities.some(r => r.id === responsibilityId && r.id.length > 20 && !r.id.startsWith('resp-'));
+    let savedRuleId = responsibilityId;
+
+    if (isExistingRule) {
+      const res = await api.put<any>(`/routing-rules/${responsibilityId}`, {
+        assigned_user_id: responsibleEmployeeId,
+        department_id: deptId,
+        category_id: catId,
+        subcategory_id: subId,
+      });
+      if (res && res.id) savedRuleId = res.id;
+    } else {
+      const res = await api.post<any>('/routing-rules', {
+        assigned_user_id: responsibleEmployeeId,
+        department_id: deptId,
+        category_id: catId,
+        subcategory_id: subId,
+        default_priority: 'MEDIUM',
+      });
+      if (res && res.id) savedRuleId = res.id;
+    }
+
+    // Update state immediately and precisely without cross-polluting subcategories/categories
+    setResponsibilities(prev => {
+      const exists = prev.some(r =>
+        r.id === responsibilityId ||
+        (subId ? r.subcategory_id === subId : (!r.subcategory_id && catId && r.category_id === catId))
+      );
+
+      if (exists) {
+        return prev.map(r => {
+          const isMatch = r.id === responsibilityId ||
+            (subId ? r.subcategory_id === subId : (!r.subcategory_id && catId && r.category_id === catId));
+          if (!isMatch) return r;
+          return {
+            ...r,
             id: savedRuleId,
-            department_id: categoryDetails?.department_id || '',
-            department_name: categoryDetails?.department_name || '',
-            category_id: categoryDetails?.category_id || '',
-            category_name: categoryDetails?.category_name || '',
-            subcategory_id: categoryDetails?.subcategory_id || null,
-            subcategory_name: categoryDetails?.subcategory_name || null,
             responsible_employee_id: responsibleEmployeeId,
             responsible_employee_name: responsibleEmployeeName,
             responsible_employee_email: responsibleEmployeeEmail,
+            ...(deptId && { department_id: deptId }),
+            ...(categoryDetails?.department_name && { department_name: categoryDetails.department_name }),
+            ...(catId && { category_id: catId }),
+            ...(categoryDetails?.category_name && { category_name: categoryDetails.category_name }),
+            subcategory_id: subId || null,
+            subcategory_name: categoryDetails?.subcategory_name || r.subcategory_name || null,
             updated_at: new Date().toISOString(),
-          },
-        ];
-      });
-    } catch (err) {
-      console.error('Failed to update category responsibility:', err);
+          };
+        });
+      }
+
+      return [
+        ...prev,
+        {
+          id: savedRuleId,
+          department_id: deptId || '',
+          department_name: categoryDetails?.department_name || '',
+          category_id: catId || '',
+          category_name: categoryDetails?.category_name || '',
+          subcategory_id: subId || null,
+          subcategory_name: categoryDetails?.subcategory_name || null,
+          responsible_employee_id: responsibleEmployeeId,
+          responsible_employee_name: responsibleEmployeeName,
+          responsible_employee_email: responsibleEmployeeEmail,
+          updated_at: new Date().toISOString(),
+        },
+      ];
+    });
+
+    // In background, re-fetch routing rules to guarantee database synchronization
+    try {
+      const ruleList = await api.get<any[]>('/routing-rules');
+      if (ruleList && Array.isArray(ruleList)) {
+        const mapped: CategoryResponsibility[] = ruleList
+          .filter((rule: any) => rule.is_active && rule.assigned_user_id)
+          .map((rule: any) => {
+            const emp = rule.assigned_user || employees.find((u: any) => u.id === rule.assigned_user_id);
+            const cat = categories.find((c: any) => c.id === rule.category_id);
+            const sub = subcategories.find((s: any) => s.id === rule.subcategory_id);
+            const dept = departments.find(
+              (d: any) => d.id === rule.department_id || (cat && d.id === cat.department_id)
+            );
+            return {
+              id: rule.id,
+              department_id: rule.department_id || (dept ? dept.id : ''),
+              department_name: dept ? dept.name : '',
+              category_id: rule.category_id || '',
+              category_name: cat ? cat.name : '',
+              subcategory_id: rule.subcategory_id || null,
+              subcategory_name: sub ? sub.name : null,
+              responsible_employee_id: rule.assigned_user_id,
+              responsible_employee_name: emp ? emp.name : 'Assigned Employee',
+              responsible_employee_email: emp ? emp.email : '',
+              updated_at: rule.updated_at || new Date().toISOString(),
+            };
+          });
+        setResponsibilities(mapped);
+      }
+    } catch {
+      // background sync fail safe
     }
   };
 
   const removeCategoryResponsibility = async (responsibilityId: string): Promise<void> => {
     try {
-      if (responsibilityId && responsibilityId.length > 20) {
+      if (responsibilityId && responsibilityId.length > 20 && !responsibilityId.startsWith('resp-')) {
         await api.delete(`/routing-rules/${responsibilityId}`).catch(() => {});
+      } else if (responsibilityId && responsibilityId.startsWith('resp-sub-')) {
+        const subId = responsibilityId.replace('resp-sub-', '');
+        const found = responsibilities.find(r => r.subcategory_id === subId);
+        if (found && found.id.length > 20 && !found.id.startsWith('resp-')) {
+          await api.delete(`/routing-rules/${found.id}`).catch(() => {});
+        }
+      } else if (responsibilityId && responsibilityId.startsWith('resp-')) {
+        const catId = responsibilityId.replace('resp-', '');
+        const found = responsibilities.find(r => !r.subcategory_id && r.category_id === catId);
+        if (found && found.id.length > 20 && !found.id.startsWith('resp-')) {
+          await api.delete(`/routing-rules/${found.id}`).catch(() => {});
+        }
       }
     } finally {
       setResponsibilities(prev =>
-        prev.filter(r => r.id !== responsibilityId && r.category_id !== responsibilityId)
+        prev.filter(r => {
+          if (r.id === responsibilityId) return false;
+          if (responsibilityId.startsWith('resp-sub-') && r.subcategory_id === responsibilityId.replace('resp-sub-', '')) return false;
+          if (responsibilityId.startsWith('resp-') && !r.subcategory_id && r.category_id === responsibilityId.replace('resp-', '')) return false;
+          return true;
+        })
       );
     }
   };

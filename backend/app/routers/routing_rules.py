@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.models.category import Category
+from app.models.subcategory import Subcategory
 from app.models.routing_rule import RoutingRule
 from app.schemas.routing_rule import RoutingRuleCreate, RoutingRuleUpdate, RoutingRuleRead
 from app.dependencies import get_current_user, require_role
@@ -23,7 +25,7 @@ def list_routing_rules(
         query = query.filter(RoutingRule.category_id == category_id)
     if department_id:
         query = query.filter(RoutingRule.department_id == department_id)
-    return query.all()
+    return query.order_by(RoutingRule.updated_at.desc()).all()
 
 
 @router.post("", response_model=RoutingRuleRead, status_code=status.HTTP_201_CREATED)
@@ -32,14 +34,68 @@ def create_routing_rule(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
-    """Create a new routing rule (Admin only)."""
+    """Create or update a routing rule (Admin only)."""
+    # Sanitize string IDs (empty string -> None)
+    cat_id = rule_in.category_id.strip() if rule_in.category_id and rule_in.category_id.strip() else None
+    sub_id = rule_in.subcategory_id.strip() if rule_in.subcategory_id and rule_in.subcategory_id.strip() else None
+    dept_id = rule_in.department_id.strip() if rule_in.department_id and rule_in.department_id.strip() else None
+    team_id = rule_in.support_team_id.strip() if rule_in.support_team_id and rule_in.support_team_id.strip() else None
+    user_id = rule_in.assigned_user_id.strip() if rule_in.assigned_user_id and rule_in.assigned_user_id.strip() else None
+
+    # If subcategory provided, validate and backfill category_id and department_id
+    if sub_id:
+        sub = db.query(Subcategory).filter(Subcategory.id == sub_id).first()
+        if not sub:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Subcategory '{sub_id}' not found")
+        cat_id = sub.category_id
+        if not dept_id and sub.category:
+            dept_id = sub.category.department_id
+
+    # If category provided, validate and backfill department_id
+    if cat_id and not dept_id:
+        cat = db.query(Category).filter(Category.id == cat_id).first()
+        if cat:
+            dept_id = cat.department_id
+
+    # Validate assigned user exists if given
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Assigned employee '{user_id}' not found")
+
+    # Upsert: check if an active rule for this specific taxonomy target already exists
+    existing = None
+    if sub_id:
+        existing = db.query(RoutingRule).filter(
+            RoutingRule.subcategory_id == sub_id
+        ).first()
+    elif cat_id:
+        existing = db.query(RoutingRule).filter(
+            RoutingRule.category_id == cat_id,
+            (RoutingRule.subcategory_id.is_(None)) | (RoutingRule.subcategory_id == "")
+        ).first()
+
+    if existing:
+        existing.assigned_user_id = user_id
+        existing.department_id = dept_id
+        existing.category_id = cat_id
+        existing.subcategory_id = sub_id
+        existing.support_team_id = team_id
+        if rule_in.default_priority:
+            existing.default_priority = rule_in.default_priority
+        existing.is_active = True
+        db.commit()
+        db.refresh(existing)
+        return existing
+
     rule = RoutingRule(
-        category_id=rule_in.category_id,
-        subcategory_id=rule_in.subcategory_id,
-        department_id=rule_in.department_id,
-        support_team_id=rule_in.support_team_id,
-        assigned_user_id=rule_in.assigned_user_id,
-        default_priority=rule_in.default_priority,
+        category_id=cat_id,
+        subcategory_id=sub_id,
+        department_id=dept_id,
+        support_team_id=team_id,
+        assigned_user_id=user_id,
+        default_priority=rule_in.default_priority or "MEDIUM",
+        is_active=True,
     )
     db.add(rule)
     db.commit()
@@ -74,7 +130,21 @@ def update_routing_rule(
 
     update_data = rule_in.model_dump(exclude_unset=True)
     for key, val in update_data.items():
+        if isinstance(val, str) and not val.strip() and key in ("department_id", "category_id", "subcategory_id", "support_team_id", "assigned_user_id"):
+            val = None
         setattr(rule, key, val)
+
+    # Re-verify and auto-fill relationships
+    if rule.subcategory_id:
+        sub = db.query(Subcategory).filter(Subcategory.id == rule.subcategory_id).first()
+        if sub:
+            rule.category_id = sub.category_id
+            if sub.category and not rule.department_id:
+                rule.department_id = sub.category.department_id
+    elif rule.category_id and not rule.department_id:
+        cat = db.query(Category).filter(Category.id == rule.category_id).first()
+        if cat:
+            rule.department_id = cat.department_id
 
     db.commit()
     db.refresh(rule)

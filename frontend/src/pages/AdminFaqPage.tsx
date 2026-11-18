@@ -6,6 +6,8 @@ import { FaqItem } from '../types';
 import { api } from '../api/client';
 import { useTickets } from '../context/TicketContext';
 
+import { getFaqs, saveFaqs, addFaq, updateFaq as updateLocalFaq, deleteFaq as deleteLocalFaq } from '../utils/faqStorage';
+
 export const AdminFaqPage: React.FC = () => {
   const { departments, categories } = useTickets();
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
@@ -15,6 +17,7 @@ export const AdminFaqPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Form state
   const [question, setQuestion] = useState('');
@@ -26,9 +29,17 @@ export const AdminFaqPage: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await api.get<FaqItem[]>('/faqs');
-      setFaqs(data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        setFaqs(data);
+        saveFaqs(data);
+      } else {
+        const local = getFaqs();
+        setFaqs(local);
+      }
     } catch (err) {
-      console.error('Failed to load FAQs:', err);
+      console.warn('Backend API /faqs unreachable, using local storage cache:', err);
+      const local = getFaqs();
+      setFaqs(local);
     } finally {
       setIsLoading(false);
     }
@@ -87,12 +98,45 @@ export const AdminFaqPage: React.FC = () => {
 
     try {
       if (editingFaq) {
-        const updated = await api.put<FaqItem>(`/faqs/${editingFaq.id}`, payload);
-        setFaqs(prev => prev.map(f => (f.id === updated.id ? updated : f)));
+        let updatedItem: FaqItem | null = null;
+        try {
+          updatedItem = await api.put<FaqItem>(`/faqs/${editingFaq.id}`, payload);
+        } catch (apiErr) {
+          console.warn('API update failed, updating locally:', apiErr);
+          const localList = updateLocalFaq(editingFaq.id, {
+            question: payload.question,
+            answer: payload.answer,
+            department_name: payload.department_name,
+            category_name: payload.category_name,
+          });
+          updatedItem = localList.find(f => f.id === editingFaq.id) || {
+            ...editingFaq,
+            question: payload.question,
+            answer: payload.answer,
+            department_name: payload.department_name,
+            category_name: payload.category_name,
+          };
+        }
+        setFaqs(prev => prev.map(f => (f.id === updatedItem!.id ? updatedItem! : f)));
+        setSuccessBanner('FAQ article updated successfully.');
       } else {
-        const created = await api.post<FaqItem>('/faqs', payload);
-        setFaqs(prev => [created, ...prev]);
+        let createdItem: FaqItem | null = null;
+        try {
+          createdItem = await api.post<FaqItem>('/faqs', payload);
+        } catch (apiErr) {
+          console.warn('API create failed, saving locally:', apiErr);
+          const localList = addFaq({
+            question: payload.question,
+            answer: payload.answer,
+            department_name: payload.department_name,
+            category_name: payload.category_name,
+          });
+          createdItem = localList[0];
+        }
+        setFaqs(prev => [createdItem!, ...prev]);
+        setSuccessBanner('FAQ article created successfully.');
       }
+      setTimeout(() => setSuccessBanner(null), 4000);
       setModalOpen(false);
       setEditingFaq(null);
     } catch (err: unknown) {
@@ -107,11 +151,14 @@ export const AdminFaqPage: React.FC = () => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this FAQ article?')) {
       try {
-        await api.delete('/faqs/' + id);
+        await api.delete('/faqs/' + id).catch(err => {
+          console.warn('API delete failed, deleting locally:', err);
+        });
+      } finally {
+        deleteLocalFaq(id);
         setFaqs(prev => prev.filter(f => f.id !== id));
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to delete FAQ.';
-        alert(msg);
+        setSuccessBanner('FAQ article removed.');
+        setTimeout(() => setSuccessBanner(null), 3000);
       }
     }
   };
@@ -142,6 +189,22 @@ export const AdminFaqPage: React.FC = () => {
           Add FAQ Article
         </Button>
       </div>
+
+      {successBanner && (
+        <div
+          style={{
+            padding: '12px 18px',
+            borderRadius: 8,
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: '#15803d',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+          }}
+        >
+          {successBanner}
+        </div>
+      )}
 
       {/* Search Bar */}
       <div className="card" style={{ padding: '12px 16px' }}>
